@@ -126,14 +126,14 @@ export default function Reminders() {
                     <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">
                         Reminders
                     </h1>
-                    {permission !== 'granted' && (
+                    <div className="flex gap-2">
                         <button
-                            onClick={requestPermission}
+                            onClick={subscribeToPush}
                             className="btn-gradient px-4 py-2 text-sm"
                         >
-                            Enable Notifications
+                            {permission === 'granted' ? 'Re-Subscribe' : 'Enable Notifications'}
                         </button>
-                    )}
+                    </div>
                 </header>
 
                 <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 mb-8">
