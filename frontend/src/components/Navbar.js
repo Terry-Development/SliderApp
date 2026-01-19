@@ -93,9 +93,10 @@ export default function Navbar() {
                 )}
 
                 {/* Sidebar */}
-                <div className={`fixed top-0 right-0 bottom-0 w-64 bg-dark-bg/95 backdrop-blur-xl border-l border-white/10 z-50 transform transition-transform duration-300 ease-in-out md:hidden flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                <div className={`fixed top-0 left-0 bottom-0 w-64 bg-[#121212] border-r border-white/10 z-50 transform transition-transform duration-300 ease-in-out md:hidden flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                     <div className="p-6 flex flex-col h-full">
-                        <div className="flex justify-end mb-8">
+                        <div className="flex justify-between items-center mb-8">
+                            <span className="font-bold text-xl">Menu</span>
                             <button
                                 onClick={() => setIsOpen(false)}
                                 className="p-2 text-gray-400 hover:text-white"
@@ -113,7 +114,7 @@ export default function Navbar() {
                                 className={`flex items-center gap-3 text-lg font-medium ${isSlider ? 'text-primary' : 'text-gray-300'}`}
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
                                 Slider
                             </Link>
@@ -141,14 +142,6 @@ export default function Navbar() {
                             </Link>
 
                             <div className="h-px bg-white/10 my-2" />
-
-                            <Link
-                                href="/gallery"
-                                onClick={() => setIsOpen(false)}
-                                className="btn-gradient text-center py-3 rounded-lg text-white font-medium shadow-lg shadow-primary/20"
-                            >
-                                Upload Photo
-                            </Link>
 
                             <button
                                 onClick={handleLogout}
