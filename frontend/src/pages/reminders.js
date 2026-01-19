@@ -46,23 +46,47 @@ export default function Reminders() {
             return;
         }
 
+        if (!VAPID_PUBLIC_KEY) {
+            alert('Error: Missing VAPID Public Key in Frontend Environment.');
+            return;
+        }
+
+        const confirmReset = confirm('This will reset your notification settings. Continue?');
+        if (!confirmReset) return;
+
         try {
+            alert('Looking for Service Worker...');
             const registration = await navigator.serviceWorker.ready;
+
+            alert('Checking existing subscription...');
+            const existingSub = await registration.pushManager.getSubscription();
+            if (existingSub) {
+                alert('Removing old subscription...');
+                await existingSub.unsubscribe();
+            }
+
+            alert('Registering new subscription...');
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
             });
 
-            await fetch(`${API_URL}/subscribe`, {
+            alert('Sending to server...');
+            const res = await fetch(`${API_URL}/subscribe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(subscription)
             });
 
-            alert('Notifications enabled!');
+            if (res.ok) {
+                alert('Success! Notifications enabled.');
+            } else {
+                alert('Server failed to save subscription.');
+            }
+
         } catch (error) {
             console.error('Failed to subscribe:', error);
-            alert('Failed to enable notifications. Make sure you installed the app to home screen (iOS).');
+            alert(`Error: ${error.message}`);
         }
     };
 
