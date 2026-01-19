@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-dark-bg: #0f172a;
+  --color-dark-card: #1e293b;
+  --color-dark-border: #334155;
+  --color-primary: #6366f1;
+  --color-primary-light: #818cf8;
+  --color-accent-purple: #a855f7;
+
+  --background-image-gradient-btn: linear-gradient(to right, #6366f1, #a855f7);
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--color-dark-bg);
+  color: #f8fafc;
+  min-height: 100vh;
+}
+
+@layer components {
+  .btn-gradient {
+    @apply bg-gradient-to-r from-primary to-accent-purple text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 hover:opacity-90 hover:shadow-lg hover:shadow-primary/30;
+  }
+
+  .card-dark {
+    @apply bg-dark-card border border-dark-border rounded-xl;
+  }
+
+  .input-dark {
+    @apply w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-primary transition-colors;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-2 px-4 py-2 rounded-lg text-slate-400 hover:text-white transition-colors;
+  }
+
+  .nav-link-active {
+    @apply flex items-center gap-2 px-4 py-2 rounded-lg bg-dark-card text-white border border-dark-border;
+  }
+}
