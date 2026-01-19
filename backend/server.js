@@ -200,6 +200,124 @@ app.delete('/albums/:name', async (req, res) => {
   }
 });
 
+// ... existing code ...
+
+const webpush = require('web-push');
+const cron = require('node-cron');
+const fs = require('fs');
+const path = require('path');
+
+// VAPID Config
+const publicVapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+const privateVapidKey = process.env.VAPID_PRIVATE_KEY;
+
+if (publicVapidKey && privateVapidKey) {
+  webpush.setVapidDetails(
+    'mailto:test@test.com',
+    publicVapidKey,
+    privateVapidKey
+  );
+}
+
+// Data Stores
+const SUBS_FILE = path.join(__dirname, 'subscriptions.json');
+const REMINDERS_FILE = path.join(__dirname, 'reminders.json');
+
+// Helper to read/write JSON
+const readJson = (file) => {
+  if (!fs.existsSync(file)) return [];
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) { return []; }
+};
+const writeJson = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 2));
+
+// --- Reminder Routes ---
+
+// Subscribe for Notifications
+app.post('/subscribe', (req, res) => {
+  const subscription = req.body;
+  let subs = readJson(SUBS_FILE);
+  // Avoid duplicates
+  if (!subs.find(s => s.endpoint === subscription.endpoint)) {
+    subs.push(subscription);
+    writeJson(SUBS_FILE, subs);
+  }
+  res.status(201).json({});
+});
+
+// Create Reminder
+app.post('/reminders', (req, res) => {
+  // Auth check
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { message, time } = req.body; // time in ISO string
+  if (!message || !time) return res.status(400).json({ error: 'Missing fields' });
+
+  let reminders = readJson(REMINDERS_FILE);
+  const newReminder = { id: Date.now().toString(), message, time, sent: false };
+  reminders.push(newReminder);
+  writeJson(REMINDERS_FILE, reminders);
+  res.json(newReminder);
+});
+
+// Get Reminders
+app.get('/reminders', (req, res) => {
+  // Auth check
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const reminders = readJson(REMINDERS_FILE);
+  // Sort by time
+  reminders.sort((a, b) => new Date(a.time) - new Date(b.time));
+  res.json(reminders);
+});
+
+// Delete Reminder
+app.delete('/reminders/:id', (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  let reminders = readJson(REMINDERS_FILE);
+  reminders = reminders.filter(r => r.id !== req.params.id);
+  writeJson(REMINDERS_FILE, reminders);
+  res.json({ success: true });
+});
+
+// --- Scheduler (Runs every minute) ---
+cron.schedule('* * * * *', () => {
+  const now = new Date();
+  let reminders = readJson(REMINDERS_FILE);
+  let subs = readJson(SUBS_FILE);
+  let modified = false;
+
+  reminders.forEach(reminder => {
+    if (!reminder.sent && new Date(reminder.time) <= now) {
+      // Time to send!
+      const payload = JSON.stringify({ title: 'Reminder', body: reminder.message });
+
+      // Send to ALL subscribers
+      subs.forEach(sub => {
+        webpush.sendNotification(sub, payload).catch(err => console.error('Push error:', err));
+      });
+
+      reminder.sent = true;
+      modified = true;
+      console.log(`Sent reminder: ${reminder.message}`);
+    }
+  });
+
+  if (modified) {
+    // Optional: Remove sent reminders or keep them marked as sent
+    // For cleanup, let's remove them after sending? Or keep for history.
+    // User requested "push notifications", usually you want them gone or marked.
+    // Let's keep them but marked sent for now so UI doesn't flicker.
+    writeJson(REMINDERS_FILE, reminders);
+  }
+});
+
 app.listen(port, () => {
   console.log(`Backend Server running on port ${port}`);
 });
