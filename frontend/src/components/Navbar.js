@@ -92,13 +92,13 @@ export default function Navbar() {
                 {/* Mobile Sidebar & Backdrop */}
                 {isOpen && (
                     <div
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden transition-opacity"
+                        className="fixed inset-0 h-[100dvh] bg-black/60 backdrop-blur-sm z-40 md:hidden transition-opacity"
                         onClick={() => setIsOpen(false)}
                     />
                 )}
 
-                {/* Sidebar: Solid Background (zinc-900), No Blur, High Z-Index */}
-                <div className={`fixed top-0 left-0 bottom-0 w-64 bg-zinc-900 border-r border-white/10 z-[60] transform transition-transform duration-300 ease-in-out md:hidden flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                {/* Sidebar: Solid Background (zinc-900), Full Dynamic Height */}
+                <div className={`fixed top-0 left-0 h-[100dvh] w-64 bg-zinc-900 border-r border-white/10 z-[60] transform transition-transform duration-300 ease-in-out md:hidden flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                     <div className="p-6 flex flex-col h-full">
                         <div className="flex justify-between items-center mb-8">
                             <span className="font-bold text-xl">Menu</span>
