@@ -33,17 +33,19 @@ export default function Navbar() {
                     )}
                 </button>
 
-                {/* Logo/Title - Centered on Mobile, Left on Desktop */}
+                {/* Logo/Title */}
+                {/* Mobile: Absolute Center */}
+                {/* Desktop: Static Left */}
                 <Link
                     href="/"
-                    className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 md:static md:transform-none md:flex md:items-center md:gap-2 z-50 flex items-center gap-2"
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 md:static md:translate-x-0 md:translate-y-0 md:flex md:items-center md:gap-2 z-50 flex items-center gap-2"
                 >
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent-purple flex items-center justify-center">
                         <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                     </div>
-                    <span className="font-bold text-lg">SliderApp</span>
+                    <span className="font-bold text-lg whitespace-nowrap">SliderApp</span>
                 </Link>
 
                 {/* Desktop Nav - Right */}
@@ -95,7 +97,8 @@ export default function Navbar() {
                     />
                 )}
 
-                <div className={`fixed top-0 left-0 bottom-0 w-64 bg-[#121212] border-r border-white/10 z-50 transform transition-transform duration-300 ease-in-out md:hidden flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                {/* Sidebar: Solid Background (zinc-900), No Blur, High Z-Index */}
+                <div className={`fixed top-0 left-0 bottom-0 w-64 bg-zinc-900 border-r border-white/10 z-[60] transform transition-transform duration-300 ease-in-out md:hidden flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                     <div className="p-6 flex flex-col h-full">
                         <div className="flex justify-between items-center mb-8">
                             <span className="font-bold text-xl">Menu</span>
