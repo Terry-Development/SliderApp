@@ -56,16 +56,22 @@ export default function Reminders() {
 
         try {
             alert('Step 1: Checking Service Worker...');
-            
+
             // Try to find existing registration
             let registration = await navigator.serviceWorker.getRegistration();
-            
+
             if (!registration) {
                 alert('No Service Worker found. Attempting to register...');
                 try {
-                    registration = await navigator.serviceWorker.register('/sw.js');
-                    alert('Service Worker Registered! Waiting for activation...');
-                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit
+                    // Fallback to registering push-sw.js directly if standard sw.js fails/timeouts
+                    alert('Registering /push-sw.js directly...');
+                    registration = await navigator.serviceWorker.register('/push-sw.js', { scope: '/' });
+
+                    if (registration.installing) alert('SW Status: Installing');
+                    else if (registration.waiting) alert('SW Status: Waiting');
+                    else if (registration.active) alert('SW Status: Active');
+
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 } catch (regError) {
                     throw new Error(`SW Registration Failed: ${regError.message}`);
                 }
@@ -78,12 +84,12 @@ export default function Reminders() {
             // Wait for it to be ready, but with timeout
             alert('Waiting for Service Worker to be ready...');
             const readyPromise = navigator.serviceWorker.ready;
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timed out waiting for Service Worker. Try reloading the page.')), 5000)
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timed out. Please check if /push-sw.js exists or Console logs.')), 5000)
             );
-            
+
             registration = await Promise.race([readyPromise, timeoutPromise]);
-            
+
             alert('Step 2: Checking Subscriptions...');
             const existingSub = await registration.pushManager.getSubscription();
             if (existingSub) {
@@ -103,7 +109,7 @@ export default function Reminders() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(subscription)
             });
-            
+
             if (res.ok) {
                 alert('Success! Notifications enabled.');
                 window.location.reload(); // Reload to refresh state
