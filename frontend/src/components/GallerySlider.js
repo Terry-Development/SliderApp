@@ -1,4 +1,3 @@
-```javascript
 import { useState } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Pagination } from 'swiper/modules'; // Navigation imported but not used to be safe, actually removing it from usage
@@ -16,7 +15,7 @@ export default function GallerySlider({ images, onDelete, selectionMode, selecte
         if (!confirm('Are you sure you want to delete this image?')) return;
         setDeletingId(id);
         try {
-            const res = await fetch(`${ API_URL } /images/${ encodeURIComponent(id) } `, {
+            const res = await fetch(`${API_URL}/images/${encodeURIComponent(id)}`, {
                 method: 'DELETE',
                 headers: getAuthHeaders()
             });
@@ -62,7 +61,7 @@ export default function GallerySlider({ images, onDelete, selectionMode, selecte
                 centeredSlides={true}
                 grabCursor={true}
                 pagination={{ clickable: true }}
-                navigation={false} 
+                navigation={false}
                 className="w-full h-[600px] md:h-[600px]"
                 style={{
                     '--swiper-pagination-color': '#3b82f6',
@@ -72,31 +71,31 @@ export default function GallerySlider({ images, onDelete, selectionMode, selecte
                 {images.map((img) => {
                     const isSelected = selectedIds.has(img.id);
                     return (
-                        <SwiperSlide 
-                            key={img.id} 
+                        <SwiperSlide
+                            key={img.id}
                             // Custom Width Logic: 
                             // Mobile: 85vw (leaves space for edges)
                             // Desktop: 350px fixed
                             className={`
-!w - [85vw]!h - [500px] md: !w - [350px]
-transition - all duration - 300
-    `}
+                                !w-[85vw] !h-[500px] md:!w-[350px]
+                                transition-all duration-300
+                            `}
                         >
                             {({ isActive }) => (
                                 <div
                                     onClick={() => selectionMode && onToggleSelect(img.id)}
                                     className={`
-rounded - 3xl overflow - hidden shadow - 2xl relative
-                                        flex flex - col h - full bg - dark - card border border - white / 10 select - none
-transition - transform duration - 300
-                                        ${ isActive ? 'scale-100 opacity-100' : 'scale-95 opacity-50' }
-                                        ${ isSelected ? 'ring-4 ring-primary' : '' }
-`}
+                                        rounded-3xl overflow-hidden shadow-2xl relative
+                                        flex flex-col h-full bg-dark-card border border-white/10 select-none
+                                        transition-transform duration-300
+                                        ${isActive ? 'scale-100 opacity-100' : 'scale-95 opacity-50'}
+                                        ${isSelected ? 'ring-4 ring-primary' : ''}
+                                    `}
                                 >
                                     {/* Main Image Layer */}
                                     <div className="absolute inset-0 z-0 bg-black">
-                                         <img 
-                                            src={img.url} 
+                                        <img
+                                            src={img.url}
                                             alt={img.title}
                                             loading="lazy"
                                             className="w-full h-full object-cover opacity-80"
@@ -106,16 +105,16 @@ transition - transform duration - 300
 
                                     {/* Card Content Overlay */}
                                     <div className="relative z-10 flex flex-col h-full p-6">
-                                        
+
                                         {/* Top Bar */}
                                         <div className="flex justify-between items-start">
                                             <div className="bg-black/30 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-2 border border-white/10">
                                                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                                                 <span className="text-white/90 text-xs font-bold tracking-wider">LIVE</span>
                                             </div>
-                                            
+
                                             {!selectionMode && (
-                                                <button 
+                                                <button
                                                     onClick={(e) => handleDelete(e, img.id)}
                                                     className="text-white/50 hover:text-red-500 transition-colors p-2 bg-black/20 rounded-full"
                                                 >
@@ -129,7 +128,7 @@ transition - transform duration - 300
                                             <h2 className="text-white font-bold text-2xl leading-tight mb-2 drop-shadow-lg">
                                                 {img.title || 'Untitled'}
                                             </h2>
-                                            
+
                                             <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/10 flex items-center justify-between">
                                                 <div className="flex flex-col">
                                                     <span className="text-blue-400 text-xs font-bold uppercase tracking-wider">Uploaded</span>
