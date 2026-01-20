@@ -324,12 +324,10 @@ cron.schedule('* * * * *', () => {
 
     if (!reminder.sent && isDue) {
       // Time to send!
+      // Simplification: Send minimal payload to avoid OS blocking complex notifications
       const payload = JSON.stringify({
         title: 'SliderApp Reminder',
-        body: reminder.message,
-        icon: '/icon-192x192.png',
-        tag: 'reminder-' + reminder.id, // Grouping
-        renotify: true // Alert again even if same tag exists
+        body: reminder.message
       });
 
       // Send to ALL subscribers

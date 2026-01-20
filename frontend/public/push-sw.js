@@ -1,33 +1,29 @@
 self.addEventListener('push', function (event) {
     console.log('[Service Worker] Push Received.');
 
-    let data = { title: 'SliderApp', body: 'New notification', icon: '/icon-192x192.png' };
+    // Default data
+    let data = { title: 'SliderApp', body: 'New notification' };
 
     if (event.data) {
         try {
-            data = event.data.json();
+            const json = event.data.json();
+            if (json) data = json;
         } catch (e) {
+            console.warn('Push data not JSON, using text');
             data.body = event.data.text();
         }
     }
 
-    const title = data.title || 'SliderApp';
     const options = {
         body: data.body,
-        icon: data.icon || '/icon-192x192.png',
+        icon: '/icon-192x192.png', // Hardcode valid local path
         badge: '/icon-192x192.png',
         vibrate: [100, 50, 100],
-        tag: data.tag || 'general-notification',
-        renotify: true, // Crucial for repeated alerts
-        requireInteraction: true, // Keep notification until user clicks
-        data: {
-            dateOfArrival: Date.now(),
-            primaryKey: '2'
-        }
+        requireInteraction: true // Keep it on screen
     };
 
     event.waitUntil(
-        self.registration.showNotification(title, options)
+        self.registration.showNotification(data.title || 'SliderApp', options)
     );
 });
 
