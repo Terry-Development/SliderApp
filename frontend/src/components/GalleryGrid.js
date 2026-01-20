@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Swal from 'sweetalert2';
 import { API_URL, getAuthHeaders } from '@/utils/api';
 
-export default function GalleryGrid({ images, onDelete, selectionMode, selectedIds = new Set(), onToggleSelect }) {
+export default function GalleryGrid({ images, onDelete, selectionMode, selectedIds = new Set(), onToggleSelect, onImageClick }) {
     const [deletingId, setDeletingId] = useState(null);
 
     const handleDelete = async (id) => {
@@ -84,7 +84,7 @@ export default function GalleryGrid({ images, onDelete, selectionMode, selectedI
                     <div
                         key={img.id}
                         className={`card-dark overflow-hidden group relative transition-all duration-200 ${isSelected ? 'ring-2 ring-primary scale-[0.98]' : ''}`}
-                        onClick={() => selectionMode && onToggleSelect(img.id)}
+                        onClick={() => selectionMode ? onToggleSelect(img.id) : onImageClick(img)}
                     >
                         {/* Image Preview */}
                         <div className={`relative h-48 bg-dark-bg cursor-pointer`}>

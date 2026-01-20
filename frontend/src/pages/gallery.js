@@ -69,6 +69,7 @@ export default function Gallery() {
 
     const [uploading, setUploading] = useState(false);
     const [showModal, setShowModal] = useState(false);
+    const [viewingImage, setViewingImage] = useState(null); // Lightbox State
 
     // Multi-Upload State
     const [pendingUploads, setPendingUploads] = useState([]);
@@ -272,6 +273,7 @@ export default function Gallery() {
         setPendingUploads(prev => [...prev, ...newUploads]);
         // Default target album to current album if inside one
         if (currentAlbum) setTargetAlbum(currentAlbum);
+        else setTargetAlbum(''); // Reset if no album selected
     };
 
     const updateUploadMetadata = (id, field, value) => {
@@ -476,11 +478,38 @@ export default function Gallery() {
                             selectionMode={selectionMode}
                             selectedIds={selectedIds}
                             onToggleSelect={toggleSelection}
+                            onImageClick={(img) => setViewingImage(img)}
                         />
                     )}
 
                 </div>
             </main>
+
+            {/* Lightbox Modal */}
+            {viewingImage && (
+                <div
+                    className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    onClick={() => setViewingImage(null)}
+                >
+                    <button
+                        className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-[70]"
+                        onClick={() => setViewingImage(null)}
+                    >
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                    <div className="max-w-7xl max-h-[90vh] relative" onClick={e => e.stopPropagation()}>
+                        <img
+                            src={viewingImage.url}
+                            alt={viewingImage.title}
+                            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                        />
+                        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white rounded-b-lg">
+                            <h3 className="text-xl font-bold">{viewingImage.title}</h3>
+                            <p className="text-sm text-slate-300">{viewingImage.description}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Upload Modal */}
             {showModal && (
@@ -494,21 +523,39 @@ export default function Gallery() {
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                            {/* Album Selection */}
+                            {/* Album Selection - Improved */}
                             <div>
-                                <label className="block text-sm font-medium text-slate-400 mb-2">Target Album / Group</label>
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        className="input-dark w-full"
-                                        placeholder="E.g. Vacation 2024 (Leave empty for General)"
-                                        value={targetAlbum}
-                                        onChange={(e) => setTargetAlbum(e.target.value)}
-                                        list="album-suggestions"
-                                    />
-                                    <datalist id="album-suggestions">
-                                        {albums.map(a => <option key={a} value={a} />)}
-                                    </datalist>
+                                <label className="block text-sm font-medium text-slate-400 mb-2">Target Album</label>
+                                <div className="space-y-3">
+                                    <select
+                                        className="input-dark w-full appearance-none"
+                                        value={targetAlbum === '__NEW__' ? '__NEW__' : (albums.includes(targetAlbum) ? targetAlbum : (targetAlbum ? '__NEW__' : ''))}
+                                        onChange={(e) => {
+                                            if (e.target.value === '__NEW__') {
+                                                setTargetAlbum(''); // Clear to allow typing new name
+                                            } else {
+                                                setTargetAlbum(e.target.value);
+                                            }
+                                        }}
+                                    >
+                                        <option value="">Select Existing Album...</option>
+                                        {albums.map(a => <option key={a} value={a}>{a}</option>)}
+                                        <option value="__NEW__" className="text-primary font-bold">+ Create New Album</option>
+                                    </select>
+
+                                    {/* Show input if "Create New" is virtually active (or targetAlbum is not in list) */}
+                                    {(!albums.includes(targetAlbum) && targetAlbum !== '') || targetAlbum === '' ? (
+                                        <div className="animate-in fade-in slide-in-from-top-2">
+                                            <input
+                                                type="text"
+                                                className="input-dark w-full bg-black/50 border-primary/30 focus:border-primary"
+                                                placeholder="Enter New Album Name..."
+                                                value={targetAlbum === '__NEW__' ? '' : targetAlbum}
+                                                onChange={(e) => setTargetAlbum(e.target.value)}
+                                            />
+                                            <p className="text-xs text-slate-500 mt-1">Type a name to create a new album automatically on upload.</p>
+                                        </div>
+                                    ) : null}
                                 </div>
                             </div>
 
