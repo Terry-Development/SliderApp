@@ -74,9 +74,6 @@ export default function Navbar() {
                     </div>
 
                     <div className="flex items-center gap-3 border-l border-white/10 pl-6">
-                        <Link href="/gallery" className="btn-gradient text-sm py-2 px-4 shadow-lg shadow-primary/20 hover:shadow-primary/40">
-                            Upload
-                        </Link>
                         <button
                             onClick={handleLogout}
                             className="p-2 text-slate-400 hover:text-white transition-colors"
