@@ -318,6 +318,37 @@ cron.schedule('* * * * *', () => {
   }
 });
 
+// --- Test Routes ---
+app.post('/test-notification', (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const subs = readJson(SUBS_FILE);
+  if (subs.length === 0) {
+    return res.status(400).json({ error: 'No subscriptions found' });
+  }
+
+  const payload = JSON.stringify({
+    title: 'Test Notification',
+    body: 'If you see this, push works!'
+  });
+
+  let successCount = 0;
+  let failCount = 0;
+
+  Promise.all(subs.map(sub =>
+    webpush.sendNotification(sub, payload)
+      .then(() => successCount++)
+      .catch(err => {
+        console.error('Test Push Error:', err);
+        failCount++;
+      })
+  )).then(() => {
+    res.json({ success: true, sent: successCount, failed: failCount });
+  });
+});
+
 app.listen(port, () => {
   console.log(`Backend Server running on port ${port}`);
 });

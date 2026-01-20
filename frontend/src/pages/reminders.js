@@ -170,6 +170,24 @@ export default function Reminders() {
         }
     };
 
+    const handleTestPush = async () => {
+        try {
+            alert('Requesting test notification...');
+            const res = await fetch(`${API_URL}/test-notification`, {
+                method: 'POST',
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(`Test Sent! Success: ${data.sent}, Failed: ${data.failed}`);
+            } else {
+                alert(`Error: ${data.error}`);
+            }
+        } catch (err) {
+            alert(`Network Error: ${err.message}`);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-dark-bg text-white font-sans selection:bg-primary/30">
             <Head>
@@ -189,6 +207,12 @@ export default function Reminders() {
                             className="btn-gradient px-4 py-2 text-sm"
                         >
                             {permission === 'granted' ? 'Re-Subscribe' : 'Enable Notifications'}
+                        </button>
+                        <button
+                            onClick={handleTestPush}
+                            className="bg-zinc-700 hover:bg-zinc-600 px-4 py-2 text-sm rounded-lg transition-colors border border-white/10"
+                        >
+                            Test Push
                         </button>
                     </div>
                 </header>
