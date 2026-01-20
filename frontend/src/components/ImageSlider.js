@@ -72,21 +72,21 @@ export default function ImageSlider({ images }) {
                 {images.map((img) => (
                     <SwiperSlide
                         key={img.id}
-                        // Auto width: The slide adapts to the image width
-                        // Fixed height: 60vh
-                        className="!w-auto !h-[60vh] md:!h-[600px] transition-all"
+                        // Reduced Mobile Height to 50vh to fit screen better
+                        // Auto width adapts to image
+                        className="!w-auto !h-[50vh] md:!h-[600px] transition-all"
                     >
                         {({ isActive }) => (
                             <div
                                 className="h-full w-auto relative flex flex-col select-none"
                             >
-                                {/* Main Image - Height Driven */}
-                                {/* This image drives the width of the parent flex/slide because of w-auto */}
+                                {/* Main Image - Height Driven + Width Constraint */}
                                 <img
                                     src={img.url}
                                     alt={img.title}
                                     loading="lazy"
-                                    className="h-full w-auto object-contain rounded-[2.5rem] shadow-2xl bg-black"
+                                    // Added max-w-[85vw] to ensure wide images don't overflow screen edges
+                                    className="h-full w-auto max-w-[85vw] object-contain rounded-[2.5rem] shadow-2xl bg-black"
                                 />
 
                                 {/* Gradient Overlay - Matches Rounding */}
