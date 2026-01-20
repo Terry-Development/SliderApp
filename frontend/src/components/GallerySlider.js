@@ -72,88 +72,98 @@ export default function GallerySlider({ images, onDelete, selectionMode, selecte
                 grabCursor={true}
                 centeredSlides={true}
                 slidesPerView={'auto'}
-                // Tweak these for the "Stack" feel:
+                // "Fan" Effect Config matching the new reference:
                 coverflowEffect={{
-                    rotate: 0, // Flat cards
+                    rotate: 40,      // Tilted side cards
                     stretch: 0,
-                    depth: 100, // Depth overlap
-                    modifier: 1, // Multiplier
-                    slideShadows: false, // Performance + Cleaner look
-                    scale: 0.85 // Make background cards smaller
+                    depth: 100,      // Set back
+                    modifier: 1,
+                    slideShadows: true, // Essential for the "behind" look
                 }}
                 pagination={true}
                 modules={[EffectCoverflow, Pagination]}
-                className="w-full h-[550px]"
+                className="w-full py-10" // Padding for rotation clearance
+                style={{
+                    '--swiper-pagination-color': '#fff',
+                    '--swiper-pagination-bullet-inactive-color': '#999',
+                    '--swiper-pagination-bottom': '0px'
+                }}
             >
                 {images.map((img) => {
                     const isSelected = selectedIds.has(img.id);
                     return (
                         <SwiperSlide
                             key={img.id}
-                            // 70vw to ensure neighbors are VISIBLE on screen
-                            className="!w-[70vw] sm:!w-[320px] transition-all"
+                            // Fixed widths for reliable "Fan" rendering
+                            // Mobile: 260px (portrait card)
+                            // Desktop: 320px
+                            className="!w-[280px] sm:!w-[340px] !h-auto transition-all"
                         >
                             {({ isActive }) => (
                                 <div
                                     onClick={() => selectionMode && onToggleSelect(img.id)}
+                                    // Aspect Ratio 3:5 or 9:16 for "Story" look
                                     className={`
-                                        bg-dark-card border border-white/10 rounded-3xl overflow-hidden shadow-2xl
-                                        flex flex-col h-full select-none relative
+                                        aspect-[3/5]
+                                        bg-dark-card border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl relative
+                                        flex flex-col select-none
                                         ${isSelected ? 'ring-4 ring-primary' : ''}
-                                        /* Add glass effect */
-                                        backdrop-blur-xl bg-opacity-90
                                     `}
                                 >
-                                    {/* Main Image Layer */}
+                                    {/* Main Image - Full Cover */}
                                     <div className="absolute inset-0 z-0 bg-black">
                                         <img
                                             src={img.url}
                                             alt={img.title}
                                             loading="lazy"
-                                            className="w-full h-full object-cover opacity-80"
+                                            className="w-full h-full object-cover"
                                         />
-                                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/90 pointer-events-none" />
+                                        {/* Gradient Overlay for Text Readability */}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
                                     </div>
 
-                                    {/* Card Content Overlay */}
-                                    <div className="relative z-10 flex flex-col h-full p-6">
-
-                                        {/* Top Bar */}
-                                        <div className="flex justify-between items-start">
-                                            <div className="bg-black/30 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-2 border border-white/10">
-                                                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                                <span className="text-white/90 text-xs font-bold tracking-wider">LIVE</span>
-                                            </div>
-
-                                            {!selectionMode && (
-                                                <button
-                                                    onClick={(e) => handleDelete(e, img.id)}
-                                                    className="text-white/50 hover:text-red-500 transition-colors p-2 bg-black/20 rounded-full"
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        {/* Bottom Info */}
-                                        <div className="mt-auto">
-                                            <h2 className="text-white font-bold text-2xl leading-tight mb-2 drop-shadow-lg">
-                                                {img.title || 'Untitled'}
-                                            </h2>
-
-                                            <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/10 flex items-center justify-between">
-                                                <div className="flex flex-col">
-                                                    <span className="text-blue-400 text-xs font-bold uppercase tracking-wider">Uploaded</span>
-                                                    <span className="text-white text-sm font-medium">{formatDate(img.createdAt)}</span>
-                                                </div>
-                                                <div className="h-8 w-px bg-white/10" />
-                                                <div className="flex flex-col items-end">
-                                                    <span className="text-blue-400 text-xs font-bold uppercase tracking-wider">Format</span>
-                                                    <span className="text-white text-sm font-medium">JPG</span>
-                                                </div>
-                                            </div>
+                                    {/* Floating Badges (Like the reference emojis) */}
+                                    <div className="absolute top-4 left-4 z-10 flex gap-2">
+                                        <div className="bg-white/20 backdrop-blur-md rounded-full px-3 py-1.5 flex items-center gap-2 border border-white/20 shadow-lg">
+                                            <span className="text-xl">🔥</span>
                                         </div>
                                     </div>
+
+                                    {/* Action Button (Like the reference circle button) */}
+                                    <div className="absolute top-1/2 right-0 transform translate-x-1/2 -translate-y-1/2 z-20">
+                                        {/* Decorative element mimicking the UI circle in reference */}
+                                    </div>
+
+                                    {/* Bottom Content */}
+                                    <div className="absolute bottom-0 left-0 right-0 p-6 z-10 text-left">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <div className="w-10 h-10 rounded-full border-2 border-white overflow-hidden bg-gray-800">
+                                                <div className="w-full h-full flex items-center justify-center text-xs text-white">USR</div>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-white font-bold text-sm tracking-wide shadow-black drop-shadow-md">
+                                                    {img.title || 'Untitled'}
+                                                </h3>
+                                                <p className="text-white/70 text-xs">
+                                                    {formatDate(img.createdAt)}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Minimal Bar */}
+                                        <div className="w-full h-1 bg-white/30 rounded-full mt-3 overflow-hidden">
+                                            <div className="w-1/3 h-full bg-white rounded-full" />
+                                        </div>
+                                    </div>
+
+                                    {!selectionMode && (
+                                        <button
+                                            onClick={(e) => handleDelete(e, img.id)}
+                                            className="absolute top-4 right-4 z-20 w-10 h-10 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white/80 hover:bg-red-500/80 hover:text-white transition-all shadow-lg"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </SwiperSlide>
