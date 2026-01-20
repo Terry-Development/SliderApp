@@ -10,6 +10,7 @@ export default function Reminders() {
     const [reminders, setReminders] = useState([]);
     const [message, setMessage] = useState('');
     const [datetime, setDatetime] = useState('');
+    const [repeatInterval, setRepeatInterval] = useState('0'); // '0' = None
     const [permission, setPermission] = useState('default');
     const [loading, setLoading] = useState(false);
 
@@ -123,14 +124,6 @@ export default function Reminders() {
         }
     };
 
-    const requestPermission = async () => {
-        const result = await Notification.requestPermission();
-        setPermission(result);
-        if (result === 'granted') {
-            subscribeToPush();
-        }
-    };
-
     const handleCreate = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -141,14 +134,15 @@ export default function Reminders() {
                 headers: getAuthHeaders(),
                 body: JSON.stringify({
                     message,
-                    // Convert local datetime-picker value to proper ISO UTC string
-                    time: new Date(datetime).toISOString()
+                    time: new Date(datetime).toISOString(),
+                    repeatInterval: parseInt(repeatInterval)
                 })
             });
 
             if (res.ok) {
                 setMessage('');
                 setDatetime('');
+                setRepeatInterval('0');
                 fetchReminders();
                 alert('Reminder set');
             } else {
@@ -158,6 +152,19 @@ export default function Reminders() {
             console.error(err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleToggle = async (id, currentStatus) => {
+        try {
+            await fetch(`${API_URL}/reminders/${id}/toggle`, {
+                method: 'PATCH',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ isActive: !currentStatus })
+            });
+            fetchReminders();
+        } catch (err) {
+            console.error(err);
         }
     };
 
@@ -171,32 +178,6 @@ export default function Reminders() {
             fetchReminders();
         } catch (err) {
             console.error(err);
-        }
-    };
-
-    const handleTestPush = async () => {
-        try {
-            alert('Requesting test notification...');
-            const res = await fetch(`${API_URL}/test-notification`, {
-                method: 'POST',
-                headers: getAuthHeaders()
-            });
-
-            const contentType = res.headers.get("content-type");
-            if (contentType && contentType.indexOf("application/json") !== -1) {
-                const data = await res.json();
-                if (res.ok) {
-                    alert(`Test Sent! Success: ${data.sent}, Failed: ${data.failed}`);
-                } else {
-                    alert(`Server Error: ${data.error}`);
-                }
-            } else {
-                const text = await res.text();
-                console.error("Non-JSON response:", text);
-                alert(`Error: Received non-JSON response from server (Status: ${res.status}). Check console logs.`);
-            }
-        } catch (err) {
-            alert(`Network Error: ${err.message}`);
         }
     };
 
@@ -220,12 +201,6 @@ export default function Reminders() {
                         >
                             {permission === 'granted' ? 'Re-Subscribe' : 'Enable Notifications'}
                         </button>
-                        <button
-                            onClick={handleTestPush}
-                            className="bg-zinc-700 hover:bg-zinc-600 px-4 py-2 text-sm rounded-lg transition-colors border border-white/10"
-                        >
-                            Test Push
-                        </button>
                     </div>
                 </header>
 
@@ -243,15 +218,31 @@ export default function Reminders() {
                                 required
                             />
                         </div>
-                        <div>
-                            <label className="block text-sm text-gray-400 mb-1">Time</label>
-                            <input
-                                type="datetime-local"
-                                value={datetime}
-                                onChange={(e) => setDatetime(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white calendar-picker-indicator:invert"
-                                required
-                            />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm text-gray-400 mb-1">Time</label>
+                                <input
+                                    type="datetime-local"
+                                    value={datetime}
+                                    onChange={(e) => setDatetime(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white calendar-picker-indicator:invert"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-gray-400 mb-1">Repeat</label>
+                                <select
+                                    value={repeatInterval}
+                                    onChange={(e) => setRepeatInterval(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white"
+                                >
+                                    <option value="0">Never</option>
+                                    <option value="15">Every 15 mins</option>
+                                    <option value="30">Every 30 mins</option>
+                                    <option value="60">Every hour</option>
+                                    <option value="1440">Daily</option>
+                                </select>
+                            </div>
                         </div>
                         <button
                             type="submit"
@@ -264,27 +255,43 @@ export default function Reminders() {
                 </div>
 
                 <div className="space-y-4">
-                    <h2 className="text-xl font-semibold">Upcoming</h2>
+                    <h2 className="text-xl font-semibold">Active Reminders</h2>
                     {reminders.length === 0 ? (
                         <p className="text-gray-500 text-center py-8">No active reminders</p>
                     ) : (
                         reminders.map(reminder => (
-                            <div key={reminder.id} className="bg-white/5 rounded-xl p-4 border border-white/10 flex items-center justify-between group hover:border-white/20 transition-all">
-                                <div>
-                                    <p className="font-medium text-lg">{reminder.message}</p>
+                            <div key={reminder.id} className={`bg-white/5 rounded-xl p-4 border flex items-center justify-between group transition-all ${reminder.isActive !== false ? 'border-white/10' : 'border-white/5 opacity-60'}`}>
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <p className={`font-medium text-lg ${reminder.isActive !== false ? 'text-white' : 'text-gray-500 line-through'}`}>{reminder.message}</p>
+                                        {reminder.repeatInterval > 0 && (
+                                            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30">
+                                                Every {reminder.repeatInterval}m
+                                            </span>
+                                        )}
+                                    </div>
                                     <p className="text-sm text-gray-400">
+                                        {reminder.repeatInterval > 0 ? 'Next: ' : ''}
                                         {new Date(reminder.time).toLocaleString()}
                                     </p>
-                                    {reminder.sent && <span className="text-xs text-green-400">Sent</span>}
                                 </div>
-                                <button
-                                    onClick={() => handleDelete(reminder.id)}
-                                    className="p-2 text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                </button>
+                                <div className="flex items-center gap-4">
+                                    <button
+                                        onClick={() => handleToggle(reminder.id, reminder.isActive ?? true)}
+                                        className={`w-12 h-6 rounded-full p-1 transition-colors ${reminder.isActive !== false ? 'bg-green-500' : 'bg-gray-600'}`}
+                                    >
+                                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${reminder.isActive !== false ? 'translate-x-6' : 'translate-x-0'}`} />
+                                    </button>
+
+                                    <button
+                                        onClick={() => handleDelete(reminder.id)}
+                                        className="p-2 text-gray-500 hover:text-red-400 transition-colors"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
                         ))
                     )}
