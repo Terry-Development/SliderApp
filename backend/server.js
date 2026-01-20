@@ -36,6 +36,11 @@ app.post('/auth', (req, res) => {
   return res.status(401).json({ success: false, message: 'Invalid password' });
 });
 
+// 1b. Health Check (Keep-Alive)
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // 2. Get Images (from specific folder or root)
 app.get('/images', async (req, res) => {
   const { folder, limit } = req.query;
