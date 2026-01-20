@@ -51,9 +51,15 @@ export default function Reminders() {
                 headers: getAuthHeaders()
             });
             const data = await res.json();
+
+            if (!res.ok) {
+                alert(`Failed: ${data.error || 'Unknown error'}`);
+                return;
+            }
+
             alert(`Result: Sent ${data.sent}, Failed ${data.failed}`);
         } catch (err) {
-            alert('Error sending test push');
+            alert(`Network Error: ${err.message}`);
             console.error(err);
         }
     };
