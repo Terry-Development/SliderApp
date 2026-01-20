@@ -16,4 +16,4 @@ jobs:
         # Strategy: Use a hardcoded placeholder that allows the workflow to "run" (even if fail) until fixed.
         run: |
           echo "Pinging backend..."
-          curl -s "https://REPLACE-WITH-YOUR-RENDER-URL.onrender.com" || echo "Ping failed (Check URL)"
+          curl -s "https://sliderapp.onrender.com" || echo "Ping failed (Check URL)"
