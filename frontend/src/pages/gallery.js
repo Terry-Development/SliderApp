@@ -282,20 +282,23 @@ export default function Gallery() {
                 <div className="max-w-7xl mx-auto px-4">
 
                     {/* Header */}
-                    <div className="flex items-center justify-between mb-8">
-                        <div className="flex items-center gap-4">
+                    {/* Header */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                        <div className="flex items-center gap-4 min-w-0">
                             {view === 'images' && (
                                 <button
                                     onClick={handleBackToAlbums}
-                                    className="p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                                    className="p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors shrink-0"
                                 >
                                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                                 </button>
                             )}
 
-                            <div>
-                                <h1 className="text-2xl font-bold flex items-center gap-2">
-                                    {view === 'albums' ? 'My Albums' : (currentAlbum || 'All Photos')}
+                            <div className="min-w-0">
+                                <h1 className="text-2xl font-bold flex items-center gap-2 truncate">
+                                    <span className="truncate max-w-[200px] md:max-w-md">
+                                        {view === 'albums' ? 'My Albums' : (currentAlbum || 'All Photos')}
+                                    </span>
                                 </h1>
                                 <p className="text-slate-500 text-sm">
                                     {view === 'albums' ? 'Select an album to view photos' : `${images.length} photos`}
@@ -303,7 +306,7 @@ export default function Gallery() {
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
                             {view === 'images' && images.length > 0 && (
                                 <>
                                     {selectionMode ? (
@@ -313,36 +316,38 @@ export default function Gallery() {
                                                     setSelectionMode(false);
                                                     setSelectedIds(new Set());
                                                 }}
-                                                className="text-slate-400 hover:text-white px-3 font-medium transition-colors"
+                                                className="text-slate-400 hover:text-white px-4 py-2 font-medium transition-colors whitespace-nowrap"
                                             >
                                                 Cancel
                                             </button>
                                             <button
                                                 onClick={handleBatchDelete}
                                                 disabled={selectedIds.size === 0 || batchDeleting}
-                                                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl font-medium transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
                                             >
                                                 {batchDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
                                             </button>
                                         </>
                                     ) : (
                                         <>
-                                            {/* Delete Album Button (Only for specific folders, not All Photos) */}
+                                            {/* Delete Album Button */}
                                             {currentAlbum && (
                                                 <button
                                                     onClick={handleDeleteAlbum}
-                                                    className="text-red-400 hover:text-red-300 px-3 py-2 rounded-lg border border-red-500/30 hover:border-red-500/80 transition-all text-sm font-medium"
+                                                    className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 hover:border-red-500/40 px-4 py-2 rounded-xl transition-all text-sm font-semibold flex items-center gap-2 whitespace-nowrap"
                                                     title="Delete Entire Album"
                                                 >
-                                                    Delete Album
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    <span className="hidden sm:inline">Delete Album</span>
                                                 </button>
                                             )}
 
                                             <button
                                                 onClick={() => setSelectionMode(true)}
-                                                className="bg-dark-card border border-dark-border text-white px-4 py-2 rounded-lg hover:border-primary transition-colors text-sm font-medium"
+                                                className="bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-white/20 px-4 py-2 rounded-xl transition-all text-sm font-medium backdrop-blur-md flex items-center gap-2 whitespace-nowrap"
                                             >
-                                                Select Photos
+                                                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                                Select
                                             </button>
                                         </>
                                     )}
@@ -351,7 +356,7 @@ export default function Gallery() {
 
                             <button
                                 onClick={() => setShowModal(true)}
-                                className="btn-gradient flex items-center gap-2"
+                                className="btn-gradient flex items-center gap-2 px-5 py-2 rounded-xl whitespace-nowrap"
                             >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
