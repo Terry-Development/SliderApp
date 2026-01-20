@@ -46,14 +46,21 @@ export default function GallerySlider({ images, onDelete, selectionMode, selecte
     }
 
     return (
-        <div className="w-full py-6 md:py-10">
-            {/* 
-               Swiper Config for "Cards with visible edges":
-               - slidesPerView: 'auto' (allows custom widths)
-               - centeredSlides: true (active slide in middle)
-               - spaceBetween: gap between slides
-               - css: slide width = 80% (mobile) to show 10% on each side
-            */}
+        <div className="w-full py-6 md:py-10 relative">
+            {/* Force Hide Navigation Buttons just in case */}
+            <style jsx global>{`
+                .swiper-button-next, .swiper-button-prev {
+                    display: none !important;
+                }
+                .swiper-slide {
+                    transition: transform 0.3s;
+                }
+                /* Center the pagination bullets at bottom */
+                .swiper-pagination {
+                    bottom: 0 !important;
+                }
+            `}</style>
+
             <Swiper
                 modules={[Pagination]}
                 spaceBetween={20}
@@ -62,7 +69,7 @@ export default function GallerySlider({ images, onDelete, selectionMode, selecte
                 grabCursor={true}
                 pagination={{ clickable: true }}
                 navigation={false}
-                className="w-full h-[600px] md:h-[600px]"
+                className="w-full h-[600px] md:h-[600px] !pb-10" // Added pb-10 for pagination space
                 style={{
                     '--swiper-pagination-color': '#3b82f6',
                     '--swiper-pagination-bullet-inactive-color': '#999999',
@@ -74,11 +81,10 @@ export default function GallerySlider({ images, onDelete, selectionMode, selecte
                         <SwiperSlide
                             key={img.id}
                             // Custom Width Logic: 
-                            // Mobile: 85vw (leaves space for edges)
+                            // Mobile: 75vw (Reduced to ensure edges are clearly visible)
                             // Desktop: 350px fixed
                             className={`
-                                !w-[85vw] !h-[500px] md:!w-[350px]
-                                transition-all duration-300
+                                !w-[75vw] !h-[500px] md:!w-[350px]
                             `}
                         >
                             {({ isActive }) => (
@@ -87,9 +93,9 @@ export default function GallerySlider({ images, onDelete, selectionMode, selecte
                                     className={`
                                         rounded-3xl overflow-hidden shadow-2xl relative
                                         flex flex-col h-full bg-dark-card border border-white/10 select-none
-                                        transition-transform duration-300
-                                        ${isActive ? 'scale-100 opacity-100' : 'scale-95 opacity-50'}
-                                        ${isSelected ? 'ring-4 ring-primary' : ''}
+                                        transition-all duration-300
+                                        ${isActive ? 'scale-100 opacity-100 ring-2 ring-white/10' : 'scale-90 opacity-40 blur-[1px]'}
+                                        ${isSelected ? '!ring-4 !ring-primary' : ''}
                                     `}
                                 >
                                     {/* Main Image Layer */}
