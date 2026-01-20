@@ -72,37 +72,36 @@ export default function ImageSlider({ images }) {
                 {images.map((img) => (
                     <SwiperSlide
                         key={img.id}
-                        // Reduced Mobile Height to 50vh to fit screen better
-                        // Auto width adapts to image
-                        className="!w-auto !h-[50vh] md:!h-[600px] transition-all"
+                        // Height: 55vh (Balanced mobile height)
+                        // Auto width with Max Width constraint
+                        className="!w-auto !h-[55vh] md:!h-[600px] transition-all"
                     >
                         {({ isActive }) => (
                             <div
                                 className="h-full w-auto relative flex flex-col select-none"
                             >
-                                {/* Main Image - Height Driven + Width Constraint */}
+                                {/* Main Image */}
                                 <img
                                     src={img.url}
                                     alt={img.title}
                                     loading="lazy"
-                                    // Added max-w-[85vw] to ensure wide images don't overflow screen edges
-                                    className="h-full w-auto max-w-[85vw] object-contain rounded-[2.5rem] shadow-2xl bg-black"
+                                    className="h-full w-auto max-w-[85vw] object-contain rounded-[2rem] shadow-2xl bg-black"
                                 />
 
-                                {/* Gradient Overlay - Matches Rounding */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none rounded-[2.5rem]" />
+                                {/* Gradient Overlay - Lighter and shorter */}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none rounded-[2rem]" />
 
-                                {/* Bottom Content Overlay */}
-                                <div className="absolute bottom-0 left-0 right-0 p-6 z-10 text-left pointer-events-none">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <div className="w-10 h-10 rounded-full border-2 border-white overflow-hidden bg-gray-800">
-                                            <div className="w-full h-full flex items-center justify-center text-xs text-white">USR</div>
+                                {/* Bottom Content Overlay - Compact */}
+                                <div className="absolute bottom-0 left-0 right-0 p-4 z-10 text-left pointer-events-none">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-8 h-8 rounded-full border border-white/50 overflow-hidden bg-gray-800 backdrop-blur-md">
+                                            <div className="w-full h-full flex items-center justify-center text-[10px] text-white">USR</div>
                                         </div>
                                         <div>
-                                            <h3 className="text-white font-bold text-sm tracking-wide shadow-black drop-shadow-md">
+                                            <h3 className="text-white font-bold text-sm leading-tight shadow-black drop-shadow-md">
                                                 {img.title || 'Untitled'}
                                             </h3>
-                                            <p className="text-white/70 text-xs shadow-black drop-shadow-md">
+                                            <p className="text-white/80 text-[10px] shadow-black drop-shadow-md">
                                                 {formatDate(img.createdAt)}
                                             </p>
                                         </div>
