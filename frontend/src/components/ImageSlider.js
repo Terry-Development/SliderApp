@@ -102,9 +102,11 @@ export default function ImageSlider({ images }) {
                                             <div className="w-full h-full flex items-center justify-center text-[10px] text-white">USR</div>
                                         </div>
                                         <div>
-                                            <h3 className="text-white font-bold text-sm leading-tight shadow-black drop-shadow-md">
-                                                {img.title || 'Untitled'}
-                                            </h3>
+                                            {img.title && (
+                                                <h3 className="text-white font-bold text-sm leading-tight shadow-black drop-shadow-md">
+                                                    {img.title}
+                                                </h3>
+                                            )}
                                             <p className="text-white/80 text-[10px] shadow-black drop-shadow-md">
                                                 {formatDate(img.createdAt)}
                                             </p>
