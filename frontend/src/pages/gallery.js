@@ -406,13 +406,18 @@ export default function Gallery() {
                             </div>
                         </div>
                     ) : (
-                        <GalleryGrid
-                            images={images}
-                            onDelete={handleDelete}
-                            selectionMode={selectionMode}
-                            selectedIds={selectedIds}
-                            onToggleSelect={toggleSelection}
-                        />
+import GallerySlider from '@/components/GallerySlider';
+                    // ... (imports)
+
+                    // Inside component:
+                    ) : (
+                    <GallerySlider
+                        images={images}
+                        onDelete={handleDelete}
+                        selectionMode={selectionMode}
+                        selectedIds={selectedIds}
+                        onToggleSelect={toggleSelection}
+                    />
                     )}
 
                 </div>
