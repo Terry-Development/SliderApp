@@ -1,11 +1,25 @@
 self.addEventListener('push', function (event) {
-    const data = event.data ? event.data.json() : { title: 'SliderApp', body: 'New notification' };
+    console.log('[Service Worker] Push Received.');
 
+    let data = { title: 'SliderApp', body: 'New notification', icon: '/icon-192x192.png' };
+
+    if (event.data) {
+        try {
+            data = event.data.json();
+        } catch (e) {
+            data.body = event.data.text();
+        }
+    }
+
+    const title = data.title || 'SliderApp';
     const options = {
         body: data.body,
-        icon: '/icon-192x192.png',
+        icon: data.icon || '/icon-192x192.png',
         badge: '/icon-192x192.png',
         vibrate: [100, 50, 100],
+        tag: data.tag || 'general-notification',
+        renotify: true, // Crucial for repeated alerts
+        requireInteraction: true, // Keep notification until user clicks
         data: {
             dateOfArrival: Date.now(),
             primaryKey: '2'
@@ -13,7 +27,7 @@ self.addEventListener('push', function (event) {
     };
 
     event.waitUntil(
-        self.registration.showNotification(data.title, options)
+        self.registration.showNotification(title, options)
     );
 });
 
