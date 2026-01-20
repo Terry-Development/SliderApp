@@ -1,17 +1,20 @@
 const cloudinary = require('cloudinary').v2;
 const https = require('https');
 
-// Helper to download JSON via HTTPS
-// Returns empty array [] if 404 or error, to behave like "empty file"
+// Helper to download JSON via HTTPS (Follows Redirects)
 const download = (url) => {
     return new Promise((resolve, reject) => {
-        https.get(url, (res) => {
+        const req = https.get(url, (res) => {
+            // Handle Redirects
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                // console.log('[CloudinaryStorage] Following redirect to:', res.headers.location);
+                return download(res.headers.location).then(resolve).catch(reject);
+            }
+
             if (res.statusCode === 404) {
-                // File doesn't exist yet
                 return resolve([]);
             }
             if (res.statusCode !== 200) {
-                // Some other error
                 return reject(new Error(`Cloudinary returned HTTP ${res.statusCode}`));
             }
 
@@ -19,16 +22,18 @@ const download = (url) => {
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
                 try {
-                    // Try to parse the content
                     resolve(JSON.parse(data));
                 } catch (e) {
-                    console.warn('[CloudinaryStorage] JSON parse error, returning empty array.', e);
-                    resolve([]);
+                    console.warn(`[CloudinaryStorage] JSON parse error. URL: ${url}`);
+                    console.warn(`[CloudinaryStorage] Content Preview: ${data.substring(0, 200)}`);
+                    resolve([]); // Fallback to safe empty
                 }
             });
-        }).on('error', (err) => {
+        });
+
+        req.on('error', (err) => {
             console.error('[CloudinaryStorage] Network error:', err);
-            resolve([]); // Fallback to safe empty
+            resolve([]);
         });
     });
 };

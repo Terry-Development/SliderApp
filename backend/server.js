@@ -41,15 +41,36 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
-// 1c. Debug Status
+// 1c. Debug Status (Enhanced)
 app.get('/debug-status', async (req, res) => {
   try {
+    const start = Date.now();
+
+    // Performance/Health Check
     const subs = await readJson(SUBS_FILE);
     const reminders = await readJson(REMINDERS_FILE);
+
+    // Verify Storage R/W
+    let storageTest = 'Skipped';
+    try {
+      const testId = `test_${Date.now()}`;
+      await writeJson('storage_test.json', { testId });
+      const readBack = await readJson('storage_test.json');
+      if (readBack.testId === testId) {
+        storageTest = 'OK';
+      } else {
+        storageTest = `FAILED (Mismatch: ${JSON.stringify(readBack)})`;
+      }
+    } catch (e) {
+      storageTest = `ERROR (${e.message})`;
+    }
+
     res.json({
       serverTime: new Date().toISOString(),
       subscriptionCount: subs.length,
       reminderCount: reminders.length,
+      storageStatus: storageTest,
+      checkDuration: `${Date.now() - start}ms`,
       success: true
     });
   } catch (e) {
