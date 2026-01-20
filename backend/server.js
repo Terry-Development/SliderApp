@@ -159,10 +159,6 @@ app.delete('/images/:id', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  // The ID sent might be just the name, but we need full public_id if it includes folder
-  // Our frontend should send the full public_id (e.g. photo-slider-app/xyz)
-  // Express decodes the URL parameter, so if it was 'photo-slider-app%2Fxyz', it becomes 'photo-slider-app/xyz'
-
   try {
     await cloudinary.uploader.destroy(id);
     res.json({ success: true, message: 'Image deleted' });
@@ -200,7 +196,6 @@ app.delete('/albums/:name', async (req, res) => {
   }
 });
 
-// ... existing code ...
 
 const webpush = require('web-push');
 const cron = require('node-cron');
@@ -253,14 +248,39 @@ app.post('/reminders', (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { message, time } = req.body; // time in ISO string
+  const { message, time, repeatInterval } = req.body;
   if (!message || !time) return res.status(400).json({ error: 'Missing fields' });
 
   let reminders = readJson(REMINDERS_FILE);
-  const newReminder = { id: Date.now().toString(), message, time, sent: false };
+  const newReminder = {
+    id: Date.now().toString(),
+    message,
+    time,
+    sent: false,
+    isActive: true, // Default to active
+    repeatInterval: repeatInterval ? parseInt(repeatInterval) : 0 // 0 means one-time
+  };
   reminders.push(newReminder);
   writeJson(REMINDERS_FILE, reminders);
   res.json(newReminder);
+});
+
+// Toggle Reminder Active Status
+app.patch('/reminders/:id/toggle', (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const { isActive } = req.body;
+  let reminders = readJson(REMINDERS_FILE);
+  const reminder = reminders.find(r => r.id === req.params.id);
+
+  if (reminder) {
+    reminder.isActive = isActive;
+    writeJson(REMINDERS_FILE, reminders);
+    res.json({ success: true, reminder });
+  } else {
+    res.status(404).json({ error: 'Not found' });
+  }
 });
 
 // Get Reminders
@@ -296,25 +316,48 @@ cron.schedule('* * * * *', () => {
   let modified = false;
 
   reminders.forEach(reminder => {
+    // Skip inactive reminders
+    if (reminder.isActive === false) return;
+
     const reminderTime = new Date(reminder.time);
+    const isDue = reminderTime <= now;
 
-    // Debug log for pending reminders
-    if (!reminder.sent) {
-      console.log(` - Pending: "${reminder.message}" | Due: ${reminderTime.toISOString()} | Overdue: ${reminderTime <= now}`);
-    }
-
-    if (!reminder.sent && reminderTime <= now) {
+    if (!reminder.sent && isDue) {
       // Time to send!
-      const payload = JSON.stringify({ title: 'Reminder', body: reminder.message });
+      const payload = JSON.stringify({
+        title: 'SliderApp Reminder',
+        body: reminder.message,
+        icon: '/icon-192x192.png',
+        tag: 'reminder-' + reminder.id, // Grouping
+        renotify: true // Alert again even if same tag exists
+      });
 
       // Send to ALL subscribers
       subs.forEach(sub => {
         webpush.sendNotification(sub, payload).catch(err => console.error('Push error:', err));
       });
 
-      reminder.sent = true;
-      modified = true;
       console.log(`   -> SENT: ${reminder.message}`);
+
+      // Update Logic
+      if (reminder.repeatInterval && reminder.repeatInterval > 0) {
+        // It's recurring!
+        // Add interval (minutes) to the time
+        // If we missed multiple cycles, keep adding until future
+        let nextTime = new Date(reminderTime.getTime() + reminder.repeatInterval * 60000);
+        while (nextTime <= new Date()) {
+          nextTime = new Date(nextTime.getTime() + reminder.repeatInterval * 60000);
+        }
+
+        reminder.time = nextTime.toISOString();
+        reminder.sent = false; // Reset sent status for next time
+        console.log(`   -> Rescheduled for: ${reminder.time}`);
+      } else {
+        // One-time reminder
+        reminder.sent = true;
+      }
+
+      modified = true;
     }
   });
 
@@ -336,7 +379,10 @@ app.post('/test-notification', (req, res) => {
 
   const payload = JSON.stringify({
     title: 'Test Notification',
-    body: 'If you see this, push works!'
+    body: 'If you see this, push works!',
+    icon: '/icon-192x192.png',
+    renotify: true,
+    requireInteraction: true
   });
 
   let successCount = 0;
