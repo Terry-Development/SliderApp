@@ -386,9 +386,7 @@ app.post('/test-notification', (req, res) => {
   const payload = JSON.stringify({
     title: 'Test Notification',
     body: 'If you see this, push works!',
-    icon: '/icon-192x192.png',
-    renotify: true,
-    requireInteraction: true
+    icon: '/icon-192x192.png'
   });
 
   let successCount = 0;

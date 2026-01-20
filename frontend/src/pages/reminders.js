@@ -43,6 +43,21 @@ export default function Reminders() {
         }
     };
 
+    const handleTestPush = async () => {
+        try {
+            alert('Sending Test Push...');
+            const res = await fetch(`${API_URL}/test-notification`, {
+                method: 'POST',
+                headers: getAuthHeaders()
+            });
+            const data = await res.json();
+            alert(`Result: Sent ${data.sent}, Failed ${data.failed}`);
+        } catch (err) {
+            alert('Error sending test push');
+            console.error(err);
+        }
+    };
+
     const subscribeToPush = async () => {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
             alert('Push messaging is not supported in this browser.');
@@ -215,6 +230,12 @@ export default function Reminders() {
                             className="btn-gradient px-4 py-2 text-sm"
                         >
                             {permission === 'granted' ? 'Re-Subscribe' : 'Enable Notifications'}
+                        </button>
+                        <button
+                            onClick={handleTestPush}
+                            className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 rounded-lg transition-colors border border-white/10"
+                        >
+                            Test Push
                         </button>
                     </div>
                 </header>
