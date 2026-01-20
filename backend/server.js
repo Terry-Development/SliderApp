@@ -332,7 +332,15 @@ cron.schedule('* * * * *', () => {
 
       // Send to ALL subscribers
       subs.forEach(sub => {
-        webpush.sendNotification(sub, payload).catch(err => console.error('Push error:', err));
+        webpush.sendNotification(sub, payload, { headers: { 'Urgency': 'high' } })
+          .catch(err => {
+            if (err.statusCode === 410 || err.statusCode === 404) {
+              // Subscription is gone
+              console.log('Subscription expired');
+            } else {
+              console.error('Push error:', err);
+            }
+          });
       });
 
       console.log(`   -> SENT: ${reminder.message}`);

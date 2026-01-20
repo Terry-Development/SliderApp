@@ -16,7 +16,7 @@ self.addEventListener('push', function (event) {
 
     const options = {
         body: data.body,
-        icon: '/icon-192x192.png', // Hardcode valid local path
+        icon: self.location.origin + '/icon-192x192.png', // Absolute path for Android
         badge: '/icon-192x192.png',
         vibrate: [100, 50, 100],
         requireInteraction: true // Keep it on screen
