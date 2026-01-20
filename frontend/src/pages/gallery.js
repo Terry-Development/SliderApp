@@ -3,6 +3,7 @@ import Head from 'next/head';
 import AuthWrapper from '@/components/AuthWrapper';
 import Navbar from '@/components/Navbar';
 import GalleryGrid from '@/components/GalleryGrid';
+import GallerySlider from '@/components/GallerySlider';
 import { API_URL, getAuthHeaders } from '@/utils/api';
 
 // Album Card Component with Cover Image Fetching
@@ -406,18 +407,13 @@ export default function Gallery() {
                             </div>
                         </div>
                     ) : (
-import GallerySlider from '@/components/GallerySlider';
-                    // ... (imports)
-
-                    // Inside component:
-                    ) : (
-                    <GallerySlider
-                        images={images}
-                        onDelete={handleDelete}
-                        selectionMode={selectionMode}
-                        selectedIds={selectedIds}
-                        onToggleSelect={toggleSelection}
-                    />
+                        <GallerySlider
+                            images={images}
+                            onDelete={handleDelete}
+                            selectionMode={selectionMode}
+                            selectedIds={selectedIds}
+                            onToggleSelect={toggleSelection}
+                        />
                     )}
 
                 </div>
