@@ -52,9 +52,9 @@ export default function ImageSlider({ images }) {
                 grabCursor={true}
                 centeredSlides={true}
                 slidesPerView={'auto'}
-                // "Fan" Effect Config matching the requested style:
+                // "Fan" Effect Config:
                 coverflowEffect={{
-                    rotate: 40,
+                    rotate: 30,
                     stretch: 0,
                     depth: 100,
                     modifier: 1,
@@ -62,7 +62,7 @@ export default function ImageSlider({ images }) {
                 }}
                 pagination={{ clickable: true }}
                 modules={[EffectCoverflow, Pagination]}
-                className="w-full py-10 z-10 !overflow-visible" // Overflow visible for shadows
+                className="w-full py-10 z-10 !overflow-visible"
                 style={{
                     '--swiper-pagination-color': '#fff',
                     '--swiper-pagination-bullet-inactive-color': '#999',
@@ -72,43 +72,42 @@ export default function ImageSlider({ images }) {
                 {images.map((img) => (
                     <SwiperSlide
                         key={img.id}
-                        // Auto width to fit image aspect ratio
-                        // Fixed height (60vh mobile, 70vh desktop)
-                        className="!w-auto !h-[55vh] md:!h-[65vh] transition-all"
+                        // "Long" Uniform Cards
+                        // Mobile: 75vw Width, 60vh Height (Portrait)
+                        className="!w-[75vw] !h-[60vh] md:!w-[340px] md:!h-[600px] transition-all"
                     >
                         {({ isActive }) => (
                             <div
                                 className={`
-                                    h-full w-auto
+                                    w-full h-full
                                     relative flex flex-col select-none
-                                    /* Removed card background/border to behave like a raw image stack */
+                                    rounded-[2.5rem] overflow-hidden shadow-2xl bg-black
                                 `}
                             >
-                                {/* Main Image - Fit Content */}
-                                <div className="relative h-full w-auto">
-                                    <img
-                                        src={img.url}
-                                        alt={img.title}
-                                        loading="lazy"
-                                        className="h-full w-auto object-contain max-w-[90vw] rounded-[1.5rem] shadow-2xl bg-black"
-                                    />
-                                    {/* Gradient Overlay for Text Readability - Matches Image Radius */}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none rounded-[1.5rem]" />
+                                {/* Main Image - Cover (Fills the "Long" card) */}
+                                <img
+                                    src={img.url}
+                                    alt={img.title}
+                                    loading="lazy"
+                                    className="w-full h-full object-cover"
+                                />
 
-                                    {/* Bottom Content Overlay */}
-                                    <div className="absolute bottom-0 left-0 right-0 p-6 z-10 text-left pointer-events-none">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <div className="w-10 h-10 rounded-full border-2 border-white overflow-hidden bg-gray-800">
-                                                <div className="w-full h-full flex items-center justify-center text-xs text-white">USR</div>
-                                            </div>
-                                            <div>
-                                                <h3 className="text-white font-bold text-sm tracking-wide shadow-black drop-shadow-md">
-                                                    {img.title || 'Untitled'}
-                                                </h3>
-                                                <p className="text-white/70 text-xs shadow-black drop-shadow-md">
-                                                    {formatDate(img.createdAt)}
-                                                </p>
-                                            </div>
+                                {/* Gradient Overlay for text visibility */}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+
+                                {/* Bottom Content Overlay */}
+                                <div className="absolute bottom-0 left-0 right-0 p-6 z-10 text-left pointer-events-none">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="w-10 h-10 rounded-full border-2 border-white overflow-hidden bg-gray-800">
+                                            <div className="w-full h-full flex items-center justify-center text-xs text-white">USR</div>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-white font-bold text-sm tracking-wide shadow-black drop-shadow-md">
+                                                {img.title || 'Untitled'}
+                                            </h3>
+                                            <p className="text-white/70 text-xs shadow-black drop-shadow-md">
+                                                {formatDate(img.createdAt)}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
