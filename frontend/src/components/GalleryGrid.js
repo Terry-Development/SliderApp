@@ -131,12 +131,7 @@ export default function GalleryGrid({ images, onDelete, selectionMode, selectedI
                                 </span>
                                 <span className="text-slate-500 text-xs">{formatDate(img.createdAt)}</span>
                             </div>
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className="px-2 py-0.5 bg-primary text-white text-xs font-semibold rounded uppercase">
-                                    USER
-                                </span>
-                                <span className="text-slate-500 text-xs">{formatDate(img.createdAt)}</span>
-                            </div>
+
                             {img.title && (
                                 <h3 className="font-semibold text-white uppercase text-sm truncate">
                                     {img.title}
