@@ -55,33 +55,60 @@ export default function Reminders() {
         if (!confirmReset) return;
 
         try {
-            alert('Looking for Service Worker...');
-            const registration = await navigator.serviceWorker.ready;
+            alert('Step 1: Checking Service Worker...');
+            
+            // Try to find existing registration
+            let registration = await navigator.serviceWorker.getRegistration();
+            
+            if (!registration) {
+                alert('No Service Worker found. Attempting to register...');
+                try {
+                    registration = await navigator.serviceWorker.register('/sw.js');
+                    alert('Service Worker Registered! Waiting for activation...');
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit
+                } catch (regError) {
+                    throw new Error(`SW Registration Failed: ${regError.message}`);
+                }
+            }
 
-            alert('Checking existing subscription...');
+            if (!registration) {
+                throw new Error('Could not get Service Worker registration.');
+            }
+
+            // Wait for it to be ready, but with timeout
+            alert('Waiting for Service Worker to be ready...');
+            const readyPromise = navigator.serviceWorker.ready;
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timed out waiting for Service Worker. Try reloading the page.')), 5000)
+            );
+            
+            registration = await Promise.race([readyPromise, timeoutPromise]);
+            
+            alert('Step 2: Checking Subscriptions...');
             const existingSub = await registration.pushManager.getSubscription();
             if (existingSub) {
-                alert('Removing old subscription...');
+                alert('Removing old existing subscription...');
                 await existingSub.unsubscribe();
             }
 
-            alert('Registering new subscription...');
+            alert('Step 3: Creating new subscription...');
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
             });
 
-            alert('Sending to server...');
+            alert('Step 4: Sending to server...');
             const res = await fetch(`${API_URL}/subscribe`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(subscription)
             });
-
+            
             if (res.ok) {
                 alert('Success! Notifications enabled.');
+                window.location.reload(); // Reload to refresh state
             } else {
-                alert('Server failed to save subscription.');
+                alert('Server failed to save subscription. Check Vercel/Render logs.');
             }
 
         } catch (error) {
