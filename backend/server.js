@@ -41,6 +41,22 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
+// 1c. Debug Status
+app.get('/debug-status', (req, res) => {
+  try {
+    const subs = readJson(SUBS_FILE);
+    const reminders = readJson(REMINDERS_FILE);
+    res.json({
+      serverTime: new Date().toISOString(),
+      subscriptionCount: subs.length,
+      reminderCount: reminders.length,
+      success: true
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // 2. Get Images (from specific folder or root)
 app.get('/images', async (req, res) => {
   const { folder, limit } = req.query;
