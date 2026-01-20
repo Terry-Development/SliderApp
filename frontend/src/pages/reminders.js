@@ -9,7 +9,8 @@ const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 export default function Reminders() {
     const [reminders, setReminders] = useState([]);
     const [message, setMessage] = useState('');
-    const [datetime, setDatetime] = useState('');
+    const [date, setDate] = useState('');
+    const [time, setTime] = useState('');
     const [repeatValue, setRepeatValue] = useState('');
     const [repeatUnit, setRepeatUnit] = useState('1'); // 1=min, 60=hour, 1440=day
     const [isRepeating, setIsRepeating] = useState(false);
@@ -155,20 +156,24 @@ export default function Reminders() {
             ? parseInt(repeatValue) * parseInt(repeatUnit)
             : 0;
 
+        // Combine Date and Time
+        const scheduledTime = new Date(`${date}T${time}`);
+
         try {
             const res = await fetch(`${API_URL}/reminders`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({
                     message,
-                    time: new Date(datetime).toISOString(),
+                    time: scheduledTime.toISOString(),
                     repeatInterval: calculatedInterval
                 })
             });
 
             if (res.ok) {
                 setMessage('');
-                setDatetime('');
+                setDate('');
+                setTime('');
                 setRepeatValue('');
                 setIsRepeating(false);
                 fetchReminders();
@@ -262,14 +267,23 @@ export default function Reminders() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm text-gray-400 mb-1">Time</label>
-                                <input
-                                    type="datetime-local"
-                                    value={datetime}
-                                    onChange={(e) => setDatetime(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white calendar-picker-indicator:invert"
-                                    required
-                                />
+                                <label className="block text-sm text-gray-400 mb-1">Date & Time</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="date"
+                                        value={date}
+                                        onChange={(e) => setDate(e.target.value)}
+                                        className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white calendar-picker-indicator:invert"
+                                        required
+                                    />
+                                    <input
+                                        type="time"
+                                        value={time}
+                                        onChange={(e) => setTime(e.target.value)}
+                                        className="w-32 bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white calendar-picker-indicator:invert"
+                                        required
+                                    />
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-sm text-gray-400 mb-1">Repeat</label>
