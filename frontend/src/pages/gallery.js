@@ -5,6 +5,59 @@ import Navbar from '@/components/Navbar';
 import GalleryGrid from '@/components/GalleryGrid';
 import { API_URL, getAuthHeaders } from '@/utils/api';
 
+// Album Card Component with Cover Image Fetching
+const AlbumCard = ({ album, onClick }) => {
+    const [cover, setCover] = useState(null);
+
+    useEffect(() => {
+        const fetchCover = async () => {
+            try {
+                const res = await fetch(`${API_URL}/images?folder=${encodeURIComponent(album)}&limit=1`, {
+                    headers: getAuthHeaders()
+                });
+                const data = await res.json();
+                if (Array.isArray(data) && data.length > 0) {
+                    setCover(data[0].url);
+                }
+            } catch (err) {
+                console.error(`Failed to fetch cover for ${album}`, err);
+            }
+        };
+        fetchCover();
+    }, [album]);
+
+    return (
+        <div
+            onClick={() => onClick(album)}
+            className="group relative aspect-square bg-dark-card rounded-2xl overflow-hidden cursor-pointer border border-white/5 hover:border-primary/50 transition-all shadow-lg hover:shadow-primary/10"
+        >
+            {/* Background Image or Fallback */}
+            {cover ? (
+                <img
+                    src={cover}
+                    alt={album}
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100"
+                />
+            ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/5 group-hover:bg-white/10 transition-colors">
+                    <svg className="w-12 h-12 text-slate-500 group-hover:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                </div>
+            )}
+
+            {/* Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+
+            {/* Text Overlay */}
+            <div className="absolute bottom-0 left-0 right-0 p-5 transform translate-y-2 group-hover:translate-y-0 transition-transform">
+                <h3 className="text-white font-bold text-lg truncate leading-tight shadow-black drop-shadow-md">{album}</h3>
+                <div className="h-0.5 w-8 bg-primary mt-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+        </div>
+    );
+};
+
 export default function Gallery() {
     const [view, setView] = useState('albums'); // 'albums' | 'images'
     const [currentAlbum, setCurrentAlbum] = useState(null);
@@ -344,17 +397,11 @@ export default function Gallery() {
 
                                 {/* Dynamic Albums */}
                                 {albums.map(album => (
-                                    <div
+                                    <AlbumCard
                                         key={album}
-                                        onClick={() => handleAlbumClick(album)}
-                                        className="card-dark aspect-square flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors group"
-                                    >
-                                        <div className="w-20 h-20 rounded-full bg-dark-bg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                            <svg className="w-10 h-10 text-accent-purple" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
-                                        </div>
-                                        <h3 className="font-bold text-white text-lg capitalize">{album}</h3>
-                                        <span className="text-slate-500 text-sm">Folder</span>
-                                    </div>
+                                        album={album}
+                                        onClick={handleAlbumClick}
+                                    />
                                 ))}
                             </div>
                         </div>

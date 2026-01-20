@@ -38,7 +38,7 @@ app.post('/auth', (req, res) => {
 
 // 2. Get Images (from specific folder or root)
 app.get('/images', async (req, res) => {
-  const { folder } = req.query;
+  const { folder, limit } = req.query;
   // Default to root folder if not specified, or specific subfolder
   // Note: prefix must end with '/' to search *inside* folder, otherwise it searches by name prefix
   const prefix = folder && folder !== 'All'
@@ -50,7 +50,7 @@ app.get('/images', async (req, res) => {
       type: 'upload',
       prefix: prefix,
       context: true,
-      max_results: 100
+      max_results: limit ? parseInt(limit) : 100
     });
 
     const images = result.resources.map(img => ({
