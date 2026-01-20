@@ -72,28 +72,25 @@ export default function ImageSlider({ images }) {
                 {images.map((img) => (
                     <SwiperSlide
                         key={img.id}
-                        // "Long" Uniform Cards
-                        // Mobile: 75vw Width, 60vh Height (Portrait)
-                        className="!w-[75vw] !h-[60vh] md:!w-[340px] md:!h-[600px] transition-all"
+                        // Auto width: The slide adapts to the image width
+                        // Fixed height: 60vh
+                        className="!w-auto !h-[60vh] md:!h-[600px] transition-all"
                     >
                         {({ isActive }) => (
                             <div
-                                className={`
-                                    w-full h-full
-                                    relative flex flex-col select-none
-                                    rounded-[2.5rem] overflow-hidden shadow-2xl bg-black
-                                `}
+                                className="h-full w-auto relative flex flex-col select-none"
                             >
-                                {/* Main Image - Cover (Fills the "Long" card) */}
+                                {/* Main Image - Height Driven */}
+                                {/* This image drives the width of the parent flex/slide because of w-auto */}
                                 <img
                                     src={img.url}
                                     alt={img.title}
                                     loading="lazy"
-                                    className="w-full h-full object-cover"
+                                    className="h-full w-auto object-contain rounded-[2.5rem] shadow-2xl bg-black"
                                 />
 
-                                {/* Gradient Overlay for text visibility */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+                                {/* Gradient Overlay - Matches Rounding */}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none rounded-[2.5rem]" />
 
                                 {/* Bottom Content Overlay */}
                                 <div className="absolute bottom-0 left-0 right-0 p-6 z-10 text-left pointer-events-none">
