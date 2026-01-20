@@ -53,7 +53,8 @@ export default function ImageSlider({ images }) {
                 grabCursor={true}
                 centeredSlides={true}
                 slidesPerView={'auto'}
-                loop={true}
+                // Only loop if we have enough images (at least 5 for smooth coverflow loop)
+                loop={images.length >= 5}
                 // "Fan" Effect Config:
                 coverflowEffect={{
                     rotate: 30,
