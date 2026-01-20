@@ -195,6 +195,7 @@ export default function Reminders() {
                 log(`Server Time: ${new Date(data.serverTime).toLocaleTimeString()}`);
                 log(`Client Time: ${new Date().toLocaleTimeString()}`);
                 log(`Registered Subs on Server: ${data.subscriptionCount}`);
+                log(`Storage System: ${data.storageStatus}`);
 
                 // Time Drift Check
                 const serverTime = new Date(data.serverTime).getTime();
