@@ -52,6 +52,7 @@ export default function ImageSlider({ images }) {
                 grabCursor={true}
                 centeredSlides={true}
                 slidesPerView={'auto'}
+                loop={true}
                 // "Fan" Effect Config:
                 coverflowEffect={{
                     rotate: 30,
