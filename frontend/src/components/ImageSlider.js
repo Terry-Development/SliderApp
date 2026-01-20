@@ -87,7 +87,7 @@ export default function ImageSlider({ images }) {
                                     src={img.url}
                                     alt={img.title}
                                     loading="lazy"
-                                    className="h-full w-auto max-w-[85vw] object-contain rounded-[2rem] shadow-2xl bg-black"
+                                    className="h-full w-auto max-w-[85vw] object-contain rounded-[2rem] shadow-2xl bg-zinc-900 border border-white/10"
                                 />
 
                                 {/* Gradient Overlay - Lighter and shorter */}
