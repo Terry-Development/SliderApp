@@ -177,11 +177,19 @@ export default function Reminders() {
                 method: 'POST',
                 headers: getAuthHeaders()
             });
-            const data = await res.json();
-            if (res.ok) {
-                alert(`Test Sent! Success: ${data.sent}, Failed: ${data.failed}`);
+
+            const contentType = res.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                const data = await res.json();
+                if (res.ok) {
+                    alert(`Test Sent! Success: ${data.sent}, Failed: ${data.failed}`);
+                } else {
+                    alert(`Server Error: ${data.error}`);
+                }
             } else {
-                alert(`Error: ${data.error}`);
+                const text = await res.text();
+                console.error("Non-JSON response:", text);
+                alert(`Error: Received non-JSON response from server (Status: ${res.status}). Check console logs.`);
             }
         } catch (err) {
             alert(`Network Error: ${err.message}`);
