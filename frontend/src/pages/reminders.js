@@ -177,7 +177,19 @@ export default function Reminders() {
                 const start = Date.now();
                 const res = await fetch(`${API_URL}/debug-status`);
                 const latency = Date.now() - start;
-                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(`Server returned HTTP ${res.status}`);
+                }
+
+                const text = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    log(`Response not JSON: ${text.substring(0, 50)}...`);
+                    throw new Error('Invalid JSON from server (Deployment in progress?)');
+                }
 
                 log(`Server Connectivity: OK (${latency}ms)`);
                 log(`Server Time: ${new Date(data.serverTime).toLocaleTimeString()}`);
