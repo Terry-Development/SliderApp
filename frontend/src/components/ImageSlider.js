@@ -62,7 +62,7 @@ export default function ImageSlider({ images }) {
                 }}
                 pagination={{ clickable: true }}
                 modules={[EffectCoverflow, Pagination]}
-                className="w-full py-10 z-10"
+                className="w-full py-10 z-10 !overflow-visible" // Overflow visible for shadows
                 style={{
                     '--swiper-pagination-color': '#fff',
                     '--swiper-pagination-bullet-inactive-color': '#999',
@@ -72,30 +72,29 @@ export default function ImageSlider({ images }) {
                 {images.map((img) => (
                     <SwiperSlide
                         key={img.id}
-                        // Mobile: 280px (portrait card)
-                        // Desktop: 340px
-                        className="!w-[280px] sm:!w-[340px] !h-auto transition-all"
+                        // Auto width to fit image aspect ratio
+                        // Fixed height (60vh mobile, 70vh desktop)
+                        className="!w-auto !h-[55vh] md:!h-[65vh] transition-all"
                     >
                         {({ isActive }) => (
                             <div
                                 className={`
-                                    aspect-[3/5]
-                                    bg-dark-card border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl relative
+                                    h-full w-auto
+                                    bg-dark-card border border-white/10 rounded-[1.5rem] overflow-hidden shadow-2xl relative
                                     flex flex-col select-none
-                                    /* Glassmorphism */
                                     backdrop-blur-xl bg-opacity-90
                                 `}
                             >
-                                {/* Main Image - Full Cover */}
-                                <div className="absolute inset-0 z-0 bg-black">
+                                {/* Main Image - Contain/Fit */}
+                                <div className="relative h-full w-auto">
                                     <img
                                         src={img.url}
                                         alt={img.title}
                                         loading="lazy"
-                                        className="w-full h-full object-cover"
+                                        className="h-full w-auto object-contain max-w-[90vw]" // Ensure it doesn't overflow width on mobile
                                     />
-                                    {/* Gradient Overlay for Text Readability */}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
+                                    {/* Gradient Overlay */}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
                                 </div>
 
                                 {/* Floating Badges */}
@@ -106,7 +105,7 @@ export default function ImageSlider({ images }) {
                                 </div>
 
                                 {/* Bottom Content */}
-                                <div className="absolute bottom-0 left-0 right-0 p-6 z-10 text-left">
+                                <div className="absolute bottom-0 left-0 right-0 p-6 z-10 text-left pointer-events-none">
                                     <div className="flex items-center gap-3 mb-2">
                                         <div className="w-10 h-10 rounded-full border-2 border-white overflow-hidden bg-gray-800">
                                             <div className="w-full h-full flex items-center justify-center text-xs text-white">USR</div>
@@ -115,15 +114,10 @@ export default function ImageSlider({ images }) {
                                             <h3 className="text-white font-bold text-sm tracking-wide shadow-black drop-shadow-md">
                                                 {img.title || 'Untitled'}
                                             </h3>
-                                            <p className="text-white/70 text-xs">
+                                            <p className="text-white/70 text-xs shadow-black drop-shadow-md">
                                                 {formatDate(img.createdAt)}
                                             </p>
                                         </div>
-                                    </div>
-
-                                    {/* Minimal Bar */}
-                                    <div className="w-full h-1 bg-white/30 rounded-full mt-3 overflow-hidden">
-                                        <div className="w-1/3 h-full bg-white rounded-full" />
                                     </div>
                                 </div>
                             </div>
