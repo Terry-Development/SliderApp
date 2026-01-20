@@ -42,10 +42,10 @@ app.get('/health', (req, res) => {
 });
 
 // 1c. Debug Status
-app.get('/debug-status', (req, res) => {
+app.get('/debug-status', async (req, res) => {
   try {
-    const subs = readJson(SUBS_FILE);
-    const reminders = readJson(REMINDERS_FILE);
+    const subs = await readJson(SUBS_FILE);
+    const reminders = await readJson(REMINDERS_FILE);
     res.json({
       serverTime: new Date().toISOString(),
       subscriptionCount: subs.length,
@@ -220,8 +220,8 @@ app.delete('/albums/:name', async (req, res) => {
 
 const webpush = require('web-push');
 const cron = require('node-cron');
-const fs = require('fs');
-const path = require('path');
+// Remove fs/path, use Cloudinary Storage
+const { readJson, writeJson } = require('./utils/CloudinaryStorage');
 
 // VAPID Config
 const publicVapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -235,35 +235,32 @@ if (publicVapidKey && privateVapidKey) {
   );
 }
 
-// Data Stores
-const SUBS_FILE = path.join(__dirname, 'subscriptions.json');
-const REMINDERS_FILE = path.join(__dirname, 'reminders.json');
-
-// Helper to read/write JSON
-const readJson = (file) => {
-  if (!fs.existsSync(file)) return [];
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch (e) { return []; }
-};
-const writeJson = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 2));
+// Data Stores (Cloudinary Public IDs)
+const SUBS_FILE = 'subscriptions.json';
+const REMINDERS_FILE = 'reminders.json';
 
 // --- Reminder Routes ---
 
 // Subscribe for Notifications
-app.post('/subscribe', (req, res) => {
+app.post('/subscribe', async (req, res) => {
   const subscription = req.body;
-  let subs = readJson(SUBS_FILE);
-  // Avoid duplicates
-  if (!subs.find(s => s.endpoint === subscription.endpoint)) {
-    subs.push(subscription);
-    writeJson(SUBS_FILE, subs);
+
+  try {
+    let subs = await readJson(SUBS_FILE);
+    // Avoid duplicates
+    if (!subs.find(s => s.endpoint === subscription.endpoint)) {
+      subs.push(subscription);
+      await writeJson(SUBS_FILE, subs);
+    }
+    res.status(201).json({});
+  } catch (err) {
+    console.error('Subscribe Error:', err);
+    res.status(500).json({ error: 'Failed to save subscription' });
   }
-  res.status(201).json({});
 });
 
 // Create Reminder
-app.post('/reminders', (req, res) => {
+app.post('/reminders', async (req, res) => {
   // Auth check
   if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -272,191 +269,218 @@ app.post('/reminders', (req, res) => {
   const { message, time, repeatInterval } = req.body;
   if (!message || !time) return res.status(400).json({ error: 'Missing fields' });
 
-  let reminders = readJson(REMINDERS_FILE);
-  const newReminder = {
-    id: Date.now().toString(),
-    message,
-    time,
-    sent: false,
-    isActive: true, // Default to active
-    repeatInterval: repeatInterval ? parseInt(repeatInterval) : 0 // 0 means one-time
-  };
-  reminders.push(newReminder);
-  writeJson(REMINDERS_FILE, reminders);
-  res.json(newReminder);
+  try {
+    let reminders = await readJson(REMINDERS_FILE);
+    const newReminder = {
+      id: Date.now().toString(),
+      message,
+      time,
+      sent: false,
+      isActive: true, // Default to active
+      repeatInterval: repeatInterval ? parseInt(repeatInterval) : 0 // 0 means one-time
+    };
+    reminders.push(newReminder);
+    await writeJson(REMINDERS_FILE, reminders);
+    res.json(newReminder);
+  } catch (err) {
+    console.error('Create Reminder Error:', err);
+    res.status(500).json({ error: 'Failed to create reminder' });
+  }
 });
 
 // Toggle Reminder Active Status
-app.patch('/reminders/:id/toggle', (req, res) => {
+app.patch('/reminders/:id/toggle', async (req, res) => {
   if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   const { isActive } = req.body;
-  let reminders = readJson(REMINDERS_FILE);
-  const reminder = reminders.find(r => r.id === req.params.id);
 
-  if (reminder) {
-    reminder.isActive = isActive;
+  try {
+    let reminders = await readJson(REMINDERS_FILE);
+    const reminder = reminders.find(r => r.id === req.params.id);
 
-    if (isActive) {
-      // Reset sent status to ensure it can fire
-      reminder.sent = false;
+    if (reminder) {
+      reminder.isActive = isActive;
 
-      // Handle Recurring rescheduling
-      if (reminder.repeatInterval > 0) {
-        let nextTime = new Date(reminder.time);
-        const now = new Date();
+      if (isActive) {
+        // Reset sent status to ensure it can fire
+        reminder.sent = false;
 
-        // If it's in the past, fast forward
-        if (nextTime <= now) {
-          while (nextTime <= now) {
-            nextTime = new Date(nextTime.getTime() + reminder.repeatInterval * 60000);
+        // Handle Recurring rescheduling
+        if (reminder.repeatInterval > 0) {
+          let nextTime = new Date(reminder.time);
+          const now = new Date();
+
+          // If it's in the past, fast forward
+          if (nextTime <= now) {
+            while (nextTime <= now) {
+              nextTime = new Date(nextTime.getTime() + reminder.repeatInterval * 60000);
+            }
+            reminder.time = nextTime.toISOString();
           }
-          reminder.time = nextTime.toISOString();
         }
+
+        // UX: Send immediate confirmation
+        try {
+          const subs = await readJson(SUBS_FILE);
+          const confirmPayload = JSON.stringify({
+            title: 'Reminder Resumed',
+            body: `Next alert at: ${new Date(reminder.time).toLocaleTimeString()}`,
+            icon: '/icon-192x192.png'
+          });
+          subs.forEach(sub => {
+            webpush.sendNotification(sub, confirmPayload, { headers: { 'Urgency': 'high' } })
+              .catch(e => console.error('Confirm push failed', e));
+          });
+        } catch (ignore) { }
       }
 
-      // UX: Send immediate confirmation
-      try {
-        const subs = readJson(SUBS_FILE);
-        const confirmPayload = JSON.stringify({
-          title: 'Reminder Resumed',
-          body: `Next alert at: ${new Date(reminder.time).toLocaleTimeString()}`,
-          icon: '/icon-192x192.png'
-        });
-        subs.forEach(sub => {
-          webpush.sendNotification(sub, confirmPayload, { headers: { 'Urgency': 'high' } })
-            .catch(e => console.error('Confirm push failed', e));
-        });
-      } catch (ignore) { }
+      await writeJson(REMINDERS_FILE, reminders);
+      res.json({ success: true, reminder });
+    } else {
+      res.status(404).json({ error: 'Not found' });
     }
-
-    writeJson(REMINDERS_FILE, reminders);
-    res.json({ success: true, reminder });
-  } else {
-    res.status(404).json({ error: 'Not found' });
+  } catch (err) {
+    console.error('Toggle Error:', err);
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
 // Get Reminders
-app.get('/reminders', (req, res) => {
+app.get('/reminders', async (req, res) => {
   // Auth check
   if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  const reminders = readJson(REMINDERS_FILE);
-  // Sort by time
-  reminders.sort((a, b) => new Date(a.time) - new Date(b.time));
-  res.json(reminders);
+  try {
+    const reminders = await readJson(REMINDERS_FILE);
+    // Sort by time
+    reminders.sort((a, b) => new Date(a.time) - new Date(b.time));
+    res.json(reminders);
+  } catch (err) {
+    console.error('Get Reminders Error:', err);
+    res.status(500).json({ error: 'Failed' });
+  }
 });
 
 // Delete Reminder
-app.delete('/reminders/:id', (req, res) => {
+app.delete('/reminders/:id', async (req, res) => {
   if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  let reminders = readJson(REMINDERS_FILE);
-  reminders = reminders.filter(r => r.id !== req.params.id);
-  writeJson(REMINDERS_FILE, reminders);
-  res.json({ success: true });
+  try {
+    let reminders = await readJson(REMINDERS_FILE);
+    reminders = reminders.filter(r => r.id !== req.params.id);
+    await writeJson(REMINDERS_FILE, reminders);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete Reminder Error:', err);
+    res.status(500).json({ error: 'Failed' });
+  }
 });
 
 // --- Scheduler (Runs every minute) ---
-cron.schedule('* * * * *', () => {
+cron.schedule('* * * * *', async () => {
   const now = new Date();
   console.log(`[Scheduler] Checking reminders at Server Time: ${now.toISOString()}`);
 
-  let reminders = readJson(REMINDERS_FILE);
-  let subs = readJson(SUBS_FILE);
-  let modified = false;
+  try {
+    // 1. Fetch latest data from Cloud (Freshness is key)
+    let reminders = await readJson(REMINDERS_FILE);
+    let subs = await readJson(SUBS_FILE);
+    let modified = false;
 
-  reminders.forEach(reminder => {
-    // Skip inactive reminders
-    if (reminder.isActive === false) return;
+    // 2. Process
+    reminders.forEach(reminder => {
+      // Skip inactive reminders
+      if (reminder.isActive === false) return;
 
-    const reminderTime = new Date(reminder.time);
-    const isDue = reminderTime <= now;
+      const reminderTime = new Date(reminder.time);
+      const isDue = reminderTime <= now;
 
-    if (!reminder.sent && isDue) {
-      // Time to send!
-      // Simplification: Send minimal payload to avoid OS blocking complex notifications
-      const payload = JSON.stringify({
-        title: 'SliderApp Reminder',
-        body: reminder.message
-      });
+      if (!reminder.sent && isDue) {
+        // Time to send!
+        const payload = JSON.stringify({
+          title: 'SliderApp Reminder',
+          body: reminder.message
+        });
 
-      // Send to ALL subscribers
-      subs.forEach(sub => {
-        webpush.sendNotification(sub, payload, { headers: { 'Urgency': 'high' } })
-          .catch(err => {
-            if (err.statusCode === 410 || err.statusCode === 404) {
-              // Subscription is gone
-              console.log('Subscription expired');
-            } else {
-              console.error('Push error:', err);
-            }
-          });
-      });
+        // Send to ALL subscribers
+        subs.forEach(sub => {
+          webpush.sendNotification(sub, payload, { headers: { 'Urgency': 'high' } })
+            .catch(err => {
+              if (err.statusCode === 410 || err.statusCode === 404) {
+                console.log('Subscription expired');
+              } else {
+                console.error('Push error:', err);
+              }
+            });
+        });
 
-      console.log(`   -> SENT: ${reminder.message}`);
+        console.log(`   -> SENT: ${reminder.message}`);
 
-      // Update Logic
-      if (reminder.repeatInterval && reminder.repeatInterval > 0) {
-        // It's recurring!
-        // Add interval (minutes) to the time
-        // If we missed multiple cycles, keep adding until future
-        let nextTime = new Date(reminderTime.getTime() + reminder.repeatInterval * 60000);
-        while (nextTime <= new Date()) {
-          nextTime = new Date(nextTime.getTime() + reminder.repeatInterval * 60000);
+        // Update Logic
+        if (reminder.repeatInterval && reminder.repeatInterval > 0) {
+          // Recurring
+          let nextTime = new Date(reminderTime.getTime() + reminder.repeatInterval * 60000);
+          while (nextTime <= new Date()) {
+            nextTime = new Date(nextTime.getTime() + reminder.repeatInterval * 60000);
+          }
+          reminder.time = nextTime.toISOString();
+          reminder.sent = false;
+          console.log(`   -> Rescheduled for: ${reminder.time}`);
+        } else {
+          // One-time
+          reminder.sent = true;
         }
 
-        reminder.time = nextTime.toISOString();
-        reminder.sent = false; // Reset sent status for next time
-        console.log(`   -> Rescheduled for: ${reminder.time}`);
-      } else {
-        // One-time reminder
-        reminder.sent = true;
+        modified = true;
       }
+    });
 
-      modified = true;
+    // 3. Save updates back to Cloud
+    if (modified) {
+      await writeJson(REMINDERS_FILE, reminders);
     }
-  });
-
-  if (modified) {
-    writeJson(REMINDERS_FILE, reminders);
+  } catch (e) {
+    console.error('[Scheduler] Error processing reminders:', e);
   }
 });
 
 // --- Test Routes ---
-app.post('/test-notification', (req, res) => {
+app.post('/test-notification', async (req, res) => {
   if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const subs = readJson(SUBS_FILE);
-  if (subs.length === 0) {
-    return res.status(400).json({ error: 'No subscriptions found' });
-  }
+  try {
+    const subs = await readJson(SUBS_FILE);
+    if (subs.length === 0) {
+      return res.status(400).json({ error: 'No subscriptions found' });
+    }
 
-  const payload = JSON.stringify({
-    title: 'Test Notification',
-    body: 'If you see this, push works!',
-    icon: '/icon-192x192.png'
-  });
+    const payload = JSON.stringify({
+      title: 'Test Notification',
+      body: 'If you see this, push works!',
+      icon: '/icon-192x192.png'
+    });
 
-  let successCount = 0;
-  let failCount = 0;
+    let successCount = 0;
+    let failCount = 0;
 
-  Promise.all(subs.map(sub =>
-    webpush.sendNotification(sub, payload)
-      .then(() => successCount++)
-      .catch(err => {
-        console.error('Test Push Error:', err);
-        failCount++;
-      })
-  )).then(() => {
+    await Promise.all(subs.map(sub =>
+      webpush.sendNotification(sub, payload)
+        .then(() => successCount++)
+        .catch(err => {
+          console.error('Test Push Error:', err);
+          failCount++;
+        })
+    ));
+
     res.json({ success: true, sent: successCount, failed: failCount });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(port, () => {
