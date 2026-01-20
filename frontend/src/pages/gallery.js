@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import Head from 'next/head';
 import AuthWrapper from '@/components/AuthWrapper';
 import Navbar from '@/components/Navbar';
@@ -139,7 +140,20 @@ export default function Gallery() {
 
     const handleBatchDelete = async () => {
         if (selectedIds.size === 0) return;
-        if (!confirm(`Are you sure you want to delete ${selectedIds.size} images? This cannot be undone.`)) return;
+
+        const result = await Swal.fire({
+            title: 'Delete Images?',
+            text: `Are you sure you want to delete ${selectedIds.size} images? This cannot be undone.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, delete them!',
+            background: '#1e1e1e',
+            color: '#fff'
+        });
+
+        if (!result.isConfirmed) return;
 
         setBatchDeleting(true);
         try {
@@ -157,12 +171,33 @@ export default function Gallery() {
                 setImages(prev => prev.filter(img => !selectedIds.has(img.id)));
                 setSelectedIds(new Set());
                 setSelectionMode(false);
+                Swal.fire({
+                    title: 'Deleted!',
+                    text: 'Your images have been deleted.',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false,
+                    background: '#1e1e1e',
+                    color: '#fff'
+                });
             } else {
                 const data = await res.json();
-                alert(`Failed to delete some images: ${data.details || data.error || 'Unknown error'}`);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Oops...',
+                    text: `Failed to delete some images: ${data.details || data.error || 'Unknown error'}`,
+                    background: '#1e1e1e',
+                    color: '#fff'
+                });
             }
         } catch (err) {
-            alert(`Error during batch delete: ${err.message}`);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: `Error during batch delete: ${err.message}`,
+                background: '#1e1e1e',
+                color: '#fff'
+            });
         } finally {
             setBatchDeleting(false);
         }
@@ -170,8 +205,20 @@ export default function Gallery() {
 
     const handleDeleteAlbum = async () => {
         if (!currentAlbum) return;
-        const confirmMsg = `DANGER: This will delete the entire album "${currentAlbum}" and ALL visible photos inside it.\n\nAre you absolutely sure?`;
-        if (!confirm(confirmMsg)) return;
+
+        const result = await Swal.fire({
+            title: 'Delete Entire Album?',
+            text: `DANGER: This will delete the album "${currentAlbum}" and ALL photos inside it!`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, delete it!',
+            background: '#1e1e1e',
+            color: '#fff'
+        });
+
+        if (!result.isConfirmed) return;
 
         try {
             const res = await fetch(`${API_URL}/albums/${encodeURIComponent(currentAlbum)}`, {
@@ -180,13 +227,34 @@ export default function Gallery() {
             });
 
             if (res.ok) {
+                Swal.fire({
+                    title: 'Deleted!',
+                    text: 'Album has been deleted.',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false,
+                    background: '#1e1e1e',
+                    color: '#fff'
+                });
                 handleBackToAlbums();
             } else {
                 const data = await res.json();
-                alert(`Failed to delete album: ${data.details || data.error || 'Unknown error'}`);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Delete Failed',
+                    text: data.details || data.error || 'Unknown error',
+                    background: '#1e1e1e',
+                    color: '#fff'
+                });
             }
         } catch (err) {
-            alert(`Error deleting album: ${err.message}`);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: err.message,
+                background: '#1e1e1e',
+                color: '#fff'
+            });
         }
     };
 

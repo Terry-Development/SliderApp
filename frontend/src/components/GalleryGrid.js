@@ -1,11 +1,25 @@
 import { useState } from 'react';
+import Swal from 'sweetalert2';
 import { API_URL, getAuthHeaders } from '@/utils/api';
 
 export default function GalleryGrid({ images, onDelete, selectionMode, selectedIds = new Set(), onToggleSelect }) {
     const [deletingId, setDeletingId] = useState(null);
 
     const handleDelete = async (id) => {
-        if (!confirm('Are you sure you want to delete this image?')) return;
+        const result = await Swal.fire({
+            title: 'Delete Image?',
+            text: "You won't be able to revert this!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, delete it!',
+            background: '#1e1e1e',
+            color: '#fff'
+        });
+
+        if (!result.isConfirmed) return;
+
         setDeletingId(id);
         try {
             const res = await fetch(`${API_URL}/images/${encodeURIComponent(id)}`, {
@@ -14,11 +28,32 @@ export default function GalleryGrid({ images, onDelete, selectionMode, selectedI
             });
             if (res.ok) {
                 onDelete(id);
+                Swal.fire({
+                    title: 'Deleted!',
+                    text: 'Your file has been deleted.',
+                    icon: 'success',
+                    timer: 1000,
+                    showConfirmButton: false,
+                    background: '#1e1e1e',
+                    color: '#fff'
+                });
             } else {
-                alert('Failed to delete');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Oops...',
+                    text: 'Failed to delete image',
+                    background: '#1e1e1e',
+                    color: '#fff'
+                });
             }
         } catch (err) {
-            alert('Error deleting image');
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Error deleting image',
+                background: '#1e1e1e',
+                color: '#fff'
+            });
         } finally {
             setDeletingId(null);
         }
