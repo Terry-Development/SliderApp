@@ -276,6 +276,21 @@ app.patch('/reminders/:id/toggle', (req, res) => {
 
   if (reminder) {
     reminder.isActive = isActive;
+
+    // FIX: If re-enabling and it's in the past, reschedule to future immediately
+    if (isActive && reminder.repeatInterval > 0) {
+      let nextTime = new Date(reminder.time);
+      const now = new Date();
+      if (nextTime <= now) {
+        // It's stale! Fast forward.
+        while (nextTime <= now) {
+          nextTime = new Date(nextTime.getTime() + reminder.repeatInterval * 60000);
+        }
+        reminder.time = nextTime.toISOString();
+        reminder.sent = false; // Reset sent status
+      }
+    }
+
     writeJson(REMINDERS_FILE, reminders);
     res.json({ success: true, reminder });
   } else {

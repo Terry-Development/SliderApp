@@ -272,37 +272,44 @@ export default function Reminders() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-gray-400 mb-1">Repeating?</label>
-                                <div className="flex items-center gap-2 h-[42px]">
-                                    <input
-                                        type="checkbox"
-                                        checked={isRepeating}
-                                        onChange={(e) => setIsRepeating(e.target.checked)}
-                                        className="w-5 h-5 rounded border-gray-600 bg-black/40 text-blue-500 focus:ring-blue-500"
-                                    />
-                                    <span className="text-sm text-gray-300">Repeat</span>
-                                </div>
+                                <label className="block text-sm text-gray-400 mb-1">Repeat</label>
+                                <select
+                                    value={isRepeating ? 'custom' : 'no'}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === 'no') {
+                                            setIsRepeating(false);
+                                            setRepeatValue('');
+                                        } else {
+                                            setIsRepeating(true);
+                                        }
+                                    }}
+                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white"
+                                >
+                                    <option value="no">Never</option>
+                                    <option value="custom">Enable Repeat...</option>
+                                </select>
                             </div>
                         </div>
 
-                        {/* Custom Repeating Input */}
+                        {/* Custom Repeating Panel */}
                         {isRepeating && (
                             <div className="bg-white/5 p-4 rounded-lg border border-white/10 animate-fade-in-down">
-                                <label className="block text-sm text-gray-400 mb-2">Repeat Interval</label>
+                                <label className="block text-sm text-gray-400 mb-2 font-medium text-blue-400">Repeat Every...</label>
                                 <div className="flex gap-2">
                                     <input
                                         type="number"
                                         min="1"
                                         value={repeatValue}
                                         onChange={(e) => setRepeatValue(e.target.value)}
-                                        className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors"
-                                        placeholder="e.g. 30"
+                                        className="w-24 bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-center"
+                                        placeholder="1"
                                         required={isRepeating}
                                     />
                                     <select
                                         value={repeatUnit}
                                         onChange={(e) => setRepeatUnit(e.target.value)}
-                                        className="bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white"
+                                        className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white"
                                     >
                                         <option value="1">Minutes</option>
                                         <option value="60">Hours</option>
