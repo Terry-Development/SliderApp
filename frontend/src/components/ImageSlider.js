@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { EffectCoverflow, Pagination } from 'swiper/modules';
+import { EffectCoverflow, Pagination, Keyboard } from 'swiper/modules';
 import { API_URL, getAuthHeaders } from '@/utils/api';
 
 // Import Swiper styles
@@ -61,7 +61,8 @@ export default function ImageSlider({ images }) {
                     slideShadows: true,
                 }}
                 pagination={{ clickable: true }}
-                modules={[EffectCoverflow, Pagination]}
+                keyboard={{ enabled: true }}
+                modules={[EffectCoverflow, Pagination, Keyboard]}
                 className="w-full py-10 z-10 !overflow-visible"
                 style={{
                     '--swiper-pagination-color': '#fff',
