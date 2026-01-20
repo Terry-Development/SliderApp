@@ -139,7 +139,11 @@ export default function Reminders() {
             const res = await fetch(`${API_URL}/reminders`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
-                body: JSON.stringify({ message, time: datetime })
+                body: JSON.stringify({
+                    message,
+                    // Convert local datetime-picker value to proper ISO UTC string
+                    time: new Date(datetime).toISOString()
+                })
             });
 
             if (res.ok) {

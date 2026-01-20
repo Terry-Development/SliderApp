@@ -289,12 +289,21 @@ app.delete('/reminders/:id', (req, res) => {
 // --- Scheduler (Runs every minute) ---
 cron.schedule('* * * * *', () => {
   const now = new Date();
+  console.log(`[Scheduler] Checking reminders at Server Time: ${now.toISOString()}`);
+
   let reminders = readJson(REMINDERS_FILE);
   let subs = readJson(SUBS_FILE);
   let modified = false;
 
   reminders.forEach(reminder => {
-    if (!reminder.sent && new Date(reminder.time) <= now) {
+    const reminderTime = new Date(reminder.time);
+
+    // Debug log for pending reminders
+    if (!reminder.sent) {
+      console.log(` - Pending: "${reminder.message}" | Due: ${reminderTime.toISOString()} | Overdue: ${reminderTime <= now}`);
+    }
+
+    if (!reminder.sent && reminderTime <= now) {
       // Time to send!
       const payload = JSON.stringify({ title: 'Reminder', body: reminder.message });
 
@@ -305,15 +314,11 @@ cron.schedule('* * * * *', () => {
 
       reminder.sent = true;
       modified = true;
-      console.log(`Sent reminder: ${reminder.message}`);
+      console.log(`   -> SENT: ${reminder.message}`);
     }
   });
 
   if (modified) {
-    // Optional: Remove sent reminders or keep them marked as sent
-    // For cleanup, let's remove them after sending? Or keep for history.
-    // User requested "push notifications", usually you want them gone or marked.
-    // Let's keep them but marked sent for now so UI doesn't flicker.
     writeJson(REMINDERS_FILE, reminders);
   }
 });
