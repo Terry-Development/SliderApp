@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Pagination } from 'swiper/modules'; // Navigation imported but not used to be safe, actually removing it from usage
+import { EffectCoverflow, Pagination } from 'swiper/modules';
 import { API_URL, getAuthHeaders } from '@/utils/api';
 
 // Import Swiper styles
 import 'swiper/css';
+import 'swiper/css/effect-coverflow';
 import 'swiper/css/pagination';
 
 export default function GallerySlider({ images, onDelete, selectionMode, selectedIds = new Set(), onToggleSelect }) {
@@ -46,56 +47,61 @@ export default function GallerySlider({ images, onDelete, selectionMode, selecte
     }
 
     return (
-        <div className="w-full py-6 md:py-10 relative">
-            {/* Force Hide Navigation Buttons just in case */}
+        <div className="w-full py-8 text-center relative max-w-full overflow-hidden">
+            {/* Styles */}
             <style jsx global>{`
                 .swiper-button-next, .swiper-button-prev {
                     display: none !important;
                 }
-                .swiper-slide {
-                    transition: transform 0.3s;
+                .swiper-pagination-bullet {
+                    background: #666;
+                    opacity: 0.5;
                 }
-                /* Center the pagination bullets at bottom */
-                .swiper-pagination {
-                    bottom: 0 !important;
+                .swiper-pagination-bullet-active {
+                    background: #3b82f6; /* Primary color */
+                    opacity: 1;
+                }
+                .swiper {
+                    overflow: visible !important; /* Allow shadows/depth to peek */
+                    padding-bottom: 40px !important;
                 }
             `}</style>
 
             <Swiper
-                modules={[Pagination]}
-                spaceBetween={20}
-                slidesPerView={'auto'}
-                centeredSlides={true}
+                effect={'coverflow'}
                 grabCursor={true}
-                pagination={{ clickable: true }}
-                navigation={false}
-                className="w-full h-[600px] md:h-[600px] !pb-10" // Added pb-10 for pagination space
-                style={{
-                    '--swiper-pagination-color': '#3b82f6',
-                    '--swiper-pagination-bullet-inactive-color': '#999999',
+                centeredSlides={true}
+                slidesPerView={'auto'}
+                // Tweak these for the "Stack" feel:
+                coverflowEffect={{
+                    rotate: 0, // Flat cards
+                    stretch: 0,
+                    depth: 100, // Depth overlap
+                    modifier: 1, // Multiplier
+                    slideShadows: false, // Performance + Cleaner look
+                    scale: 0.85 // Make background cards smaller
                 }}
+                pagination={true}
+                modules={[EffectCoverflow, Pagination]}
+                className="w-full h-[550px]"
             >
                 {images.map((img) => {
                     const isSelected = selectedIds.has(img.id);
                     return (
                         <SwiperSlide
                             key={img.id}
-                            // Custom Width Logic: 
-                            // Mobile: 75vw (Reduced to ensure edges are clearly visible)
-                            // Desktop: 350px fixed
-                            className={`
-                                !w-[75vw] !h-[500px] md:!w-[350px]
-                            `}
+                            // 70vw to ensure neighbors are VISIBLE on screen
+                            className="!w-[70vw] sm:!w-[320px] transition-all"
                         >
                             {({ isActive }) => (
                                 <div
                                     onClick={() => selectionMode && onToggleSelect(img.id)}
                                     className={`
-                                        rounded-3xl overflow-hidden shadow-2xl relative
-                                        flex flex-col h-full bg-dark-card border border-white/10 select-none
-                                        transition-all duration-300
-                                        ${isActive ? 'scale-100 opacity-100 ring-2 ring-white/10' : 'scale-90 opacity-40 blur-[1px]'}
-                                        ${isSelected ? '!ring-4 !ring-primary' : ''}
+                                        bg-dark-card border border-white/10 rounded-3xl overflow-hidden shadow-2xl
+                                        flex flex-col h-full select-none relative
+                                        ${isSelected ? 'ring-4 ring-primary' : ''}
+                                        /* Add glass effect */
+                                        backdrop-blur-xl bg-opacity-90
                                     `}
                                 >
                                     {/* Main Image Layer */}
