@@ -1,0 +1,19 @@
+name: Keep Server Awake
+
+on:
+  schedule:
+    # Run every 14 minutes (Render sleeps after 15m)
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping_backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Backend
+        # We try to ping the backend. We use a generic variable or placeholder.
+        # Since we don't know the exact URL, we will ask the user to set it as a variable or edit this file.
+        # Strategy: Use a hardcoded placeholder that allows the workflow to "run" (even if fail) until fixed.
+        run: |
+          echo "Pinging backend..."
+          curl -s "https://REPLACE-WITH-YOUR-RENDER-URL.onrender.com" || echo "Ping failed (Check URL)"

@@ -277,18 +277,37 @@ app.patch('/reminders/:id/toggle', (req, res) => {
   if (reminder) {
     reminder.isActive = isActive;
 
-    // FIX: If re-enabling and it's in the past, reschedule to future immediately
-    if (isActive && reminder.repeatInterval > 0) {
-      let nextTime = new Date(reminder.time);
-      const now = new Date();
-      if (nextTime <= now) {
-        // It's stale! Fast forward.
-        while (nextTime <= now) {
-          nextTime = new Date(nextTime.getTime() + reminder.repeatInterval * 60000);
+    if (isActive) {
+      // Reset sent status to ensure it can fire
+      reminder.sent = false;
+
+      // Handle Recurring rescheduling
+      if (reminder.repeatInterval > 0) {
+        let nextTime = new Date(reminder.time);
+        const now = new Date();
+
+        // If it's in the past, fast forward
+        if (nextTime <= now) {
+          while (nextTime <= now) {
+            nextTime = new Date(nextTime.getTime() + reminder.repeatInterval * 60000);
+          }
+          reminder.time = nextTime.toISOString();
         }
-        reminder.time = nextTime.toISOString();
-        reminder.sent = false; // Reset sent status
       }
+
+      // UX: Send immediate confirmation
+      try {
+        const subs = readJson(SUBS_FILE);
+        const confirmPayload = JSON.stringify({
+          title: 'Reminder Resumed',
+          body: `Next alert at: ${new Date(reminder.time).toLocaleTimeString()}`,
+          icon: '/icon-192x192.png'
+        });
+        subs.forEach(sub => {
+          webpush.sendNotification(sub, confirmPayload, { headers: { 'Urgency': 'high' } })
+            .catch(e => console.error('Confirm push failed', e));
+        });
+      } catch (ignore) { }
     }
 
     writeJson(REMINDERS_FILE, reminders);
