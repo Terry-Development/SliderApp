@@ -48,6 +48,7 @@ export default function ImageSlider({ images }) {
             `}</style>
 
             <Swiper
+                key={images.length} // Force re-init when images define loop requirements
                 effect={'coverflow'}
                 grabCursor={true}
                 centeredSlides={true}
