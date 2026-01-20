@@ -10,7 +10,9 @@ export default function Reminders() {
     const [reminders, setReminders] = useState([]);
     const [message, setMessage] = useState('');
     const [datetime, setDatetime] = useState('');
-    const [repeatInterval, setRepeatInterval] = useState('0'); // '0' = None
+    const [repeatValue, setRepeatValue] = useState('');
+    const [repeatUnit, setRepeatUnit] = useState('1'); // 1=min, 60=hour, 1440=day
+    const [isRepeating, setIsRepeating] = useState(false);
     const [permission, setPermission] = useState('default');
     const [loading, setLoading] = useState(false);
 
@@ -128,6 +130,10 @@ export default function Reminders() {
         e.preventDefault();
         setLoading(true);
 
+        const calculatedInterval = isRepeating && repeatValue
+            ? parseInt(repeatValue) * parseInt(repeatUnit)
+            : 0;
+
         try {
             const res = await fetch(`${API_URL}/reminders`, {
                 method: 'POST',
@@ -135,14 +141,15 @@ export default function Reminders() {
                 body: JSON.stringify({
                     message,
                     time: new Date(datetime).toISOString(),
-                    repeatInterval: parseInt(repeatInterval)
+                    repeatInterval: calculatedInterval
                 })
             });
 
             if (res.ok) {
                 setMessage('');
                 setDatetime('');
-                setRepeatInterval('0');
+                setRepeatValue('');
+                setIsRepeating(false);
                 fetchReminders();
                 alert('Reminder set');
             } else {
@@ -179,6 +186,14 @@ export default function Reminders() {
         } catch (err) {
             console.error(err);
         }
+    };
+
+    // Helper to format interval for display
+    const formatInterval = (mins) => {
+        if (!mins) return '';
+        if (mins % 1440 === 0) return `Every ${mins / 1440} Day(s)`;
+        if (mins % 60 === 0) return `Every ${mins / 60} Hour(s)`;
+        return `Every ${mins} Minute(s)`;
     };
 
     return (
@@ -230,20 +245,46 @@ export default function Reminders() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm text-gray-400 mb-1">Repeat</label>
-                                <select
-                                    value={repeatInterval}
-                                    onChange={(e) => setRepeatInterval(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white"
-                                >
-                                    <option value="0">Never</option>
-                                    <option value="15">Every 15 mins</option>
-                                    <option value="30">Every 30 mins</option>
-                                    <option value="60">Every hour</option>
-                                    <option value="1440">Daily</option>
-                                </select>
+                                <label className="block text-sm text-gray-400 mb-1">Repeating?</label>
+                                <div className="flex items-center gap-2 h-[42px]">
+                                    <input
+                                        type="checkbox"
+                                        checked={isRepeating}
+                                        onChange={(e) => setIsRepeating(e.target.checked)}
+                                        className="w-5 h-5 rounded border-gray-600 bg-black/40 text-blue-500 focus:ring-blue-500"
+                                    />
+                                    <span className="text-sm text-gray-300">Repeat</span>
+                                </div>
                             </div>
                         </div>
+
+                        {/* Custom Repeating Input */}
+                        {isRepeating && (
+                            <div className="bg-white/5 p-4 rounded-lg border border-white/10 animate-fade-in-down">
+                                <label className="block text-sm text-gray-400 mb-2">Repeat Interval</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={repeatValue}
+                                        onChange={(e) => setRepeatValue(e.target.value)}
+                                        className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors"
+                                        placeholder="e.g. 30"
+                                        required={isRepeating}
+                                    />
+                                    <select
+                                        value={repeatUnit}
+                                        onChange={(e) => setRepeatUnit(e.target.value)}
+                                        className="bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white"
+                                    >
+                                        <option value="1">Minutes</option>
+                                        <option value="60">Hours</option>
+                                        <option value="1440">Days</option>
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+
                         <button
                             type="submit"
                             disabled={loading}
@@ -266,7 +307,7 @@ export default function Reminders() {
                                         <p className={`font-medium text-lg ${reminder.isActive !== false ? 'text-white' : 'text-gray-500 line-through'}`}>{reminder.message}</p>
                                         {reminder.repeatInterval > 0 && (
                                             <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30">
-                                                Every {reminder.repeatInterval}m
+                                                {formatInterval(reminder.repeatInterval)}
                                             </span>
                                         )}
                                     </div>
