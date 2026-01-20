@@ -407,7 +407,7 @@ export default function Gallery() {
                             </div>
                         </div>
                     ) : (
-                        <GallerySlider
+                        <GalleryGrid
                             images={images}
                             onDelete={handleDelete}
                             selectionMode={selectionMode}
