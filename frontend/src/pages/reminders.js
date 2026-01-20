@@ -170,6 +170,20 @@ export default function Reminders() {
                 log(`SW State: ${reg.active ? 'Active' : (reg.waiting ? 'Waiting' : 'Installing')}`);
                 const sub = await reg.pushManager.getSubscription();
                 log(`Push Subscription: ${sub ? 'Present' : 'MISSING (Click Enable)'}`);
+
+                if (sub) {
+                    log('Attempting to Re-Sync Subscription...');
+                    try {
+                        await fetch(`${API_URL}/subscribe`, {
+                            method: 'POST',
+                            body: JSON.stringify(sub),
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        log('Re-Sync Success: Server updated.');
+                    } catch (e) {
+                        log(`Re-Sync Failed: ${e.message}`);
+                    }
+                }
             }
 
             log('\n--- SERVER CHECKS ---');

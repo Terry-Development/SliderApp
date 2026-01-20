@@ -55,11 +55,15 @@ app.get('/debug-status', async (req, res) => {
     try {
       const testId = `test_${Date.now()}`;
       await writeJson('storage_test.json', { testId });
+
+      // Wait 2s for Cloudinary CDN to propagate
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       const readBack = await readJson('storage_test.json');
       if (readBack.testId === testId) {
         storageTest = 'OK';
       } else {
-        storageTest = `FAILED (Mismatch: ${JSON.stringify(readBack)})`;
+        storageTest = `FAILED (Mismatch: Expected ${testId}, Got ${readBack.testId})`;
       }
     } catch (e) {
       storageTest = `ERROR (${e.message})`;
