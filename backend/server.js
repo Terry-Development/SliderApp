@@ -135,8 +135,19 @@ app.post('/images/upload', upload.single('image'), (req, res) => {
   const { title, description, folder } = req.body;
   const file = req.file;
 
-  if (!file) return res.status(400).json({ error: 'No image file provided' });
+  if (!file) {
+    console.error('Upload Error: No file provided');
+    return res.status(400).json({ error: 'No image file provided' });
+  }
+
+  console.log('Upload Request:', {
+    filename: file.originalname,
+    size: file.size,
+    folder: folder || 'root'
+  });
+
   if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    console.error('Upload Error: Unauthorized');
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
