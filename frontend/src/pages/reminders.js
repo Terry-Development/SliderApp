@@ -423,13 +423,15 @@ export default function Reminders() {
                 </header>
 
                 {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div className="flex flex-col gap-10">
 
                     {/* Left Column: Create Form */}
-                    <div className="lg:col-span-5 order-2 lg:order-1">
+                    <div>
                         <div className="bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-6 md:p-8 sticky top-28">
                             <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                                <span className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">Wed</span>
+                                <span className="px-3 py-1 rounded-lg bg-primary/20 text-primary text-sm font-bold uppercase tracking-wide">
+                                    {new Date().toLocaleDateString('en-US', { weekday: 'short' })}
+                                </span>
                                 New Reminder
                             </h2>
 
@@ -527,7 +529,7 @@ export default function Reminders() {
                     </div>
 
                     {/* Right Column: List */}
-                    <div className="lg:col-span-7 order-1 lg:order-2 space-y-6">
+                    <div className="space-y-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-bold">Upcoming</h2>
                             <span className="text-xs font-medium px-2 py-1 bg-white/10 rounded-lg text-slate-300">{reminders.length} Active</span>
