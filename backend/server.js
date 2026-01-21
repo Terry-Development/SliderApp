@@ -83,10 +83,9 @@ app.get('/debug-status', async (req, res) => {
 });
 
 // 2. Get Images (from specific folder or root)
+// 2. Get Images (from specific folder or root)
 app.get('/images', async (req, res) => {
   const { folder, limit } = req.query;
-  // Default to root folder if not specified, or specific subfolder
-  // Note: prefix must end with '/' to search *inside* folder, otherwise it searches by name prefix
   const prefix = folder && folder !== 'All'
     ? `photo-slider-app/${folder}/`
     : 'photo-slider-app/';
@@ -96,10 +95,12 @@ app.get('/images', async (req, res) => {
       type: 'upload',
       prefix: prefix,
       context: true,
-      max_results: limit ? parseInt(limit) : 100
+      max_results: 500, // Fetch more to ensure we get recent ones
+      direction: 'desc' // Try native sorting if supported, but we'll sort manually too
     });
 
-    const images = result.resources.map(img => ({
+    // Map to our format
+    let images = result.resources.map(img => ({
       id: img.public_id,
       url: img.secure_url,
       title: img.context?.custom?.title || '',
@@ -107,10 +108,18 @@ app.get('/images', async (req, res) => {
       createdAt: img.created_at
     }));
 
+    // Manual Sort: Newest First
+    images.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    // Apply limit if requested
+    if (limit) {
+      images = images.slice(0, parseInt(limit));
+    }
+
     res.json(images);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to fetch images' });
+    console.error('Fetch Images Error:', error);
+    res.status(500).json({ error: 'Failed to fetch images', details: error.message });
   }
 });
 
