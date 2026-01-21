@@ -392,16 +392,19 @@ app.delete('/reminders/:id', async (req, res) => {
   }
 });
 
-// --- Scheduler (Runs every minute) ---
-cron.schedule('* * * * *', async () => {
+// --- Reminder Logic (Extracted for Manual Triggering) ---
+async function processReminders() {
   const now = new Date();
-  console.log(`[Scheduler] Checking reminders at Server Time: ${now.toISOString()}`);
+  const logs = [];
+  logs.push(`[Scheduler] Checking reminders at Server Time: ${now.toISOString()}`);
 
   try {
     // 1. Fetch latest data from Cloud (Freshness is key)
     let reminders = await readJson(REMINDERS_FILE);
     let subs = await readJson(SUBS_FILE);
     let modified = false;
+
+    logs.push(`Loaded ${reminders.length} reminders and ${subs.length} subscriptions.`);
 
     // 2. Process
     reminders.forEach(reminder => {
@@ -430,7 +433,9 @@ cron.schedule('* * * * *', async () => {
             });
         });
 
-        console.log(`   -> SENT: ${reminder.message}`);
+        const logMsg = `   -> SENT: ${reminder.message}`;
+        console.log(logMsg);
+        logs.push(logMsg);
 
         // Update Logic
         if (reminder.repeatInterval && reminder.repeatInterval > 0) {
@@ -441,7 +446,9 @@ cron.schedule('* * * * *', async () => {
           }
           reminder.time = nextTime.toISOString();
           reminder.sent = false;
-          console.log(`   -> Rescheduled for: ${reminder.time}`);
+          const rescheduleMsg = `   -> Rescheduled for: ${reminder.time}`;
+          console.log(rescheduleMsg);
+          logs.push(rescheduleMsg);
         } else {
           // One-time
           reminder.sent = true;
@@ -454,9 +461,34 @@ cron.schedule('* * * * *', async () => {
     // 3. Save updates back to Cloud
     if (modified) {
       await writeJson(REMINDERS_FILE, reminders);
+      logs.push('Updates saved to storage.');
+    } else {
+      logs.push('No due reminders found needing updates.');
     }
   } catch (e) {
-    console.error('[Scheduler] Error processing reminders:', e);
+    const errorMsg = `[Scheduler] Error processing reminders: ${e.message}`;
+    console.error(errorMsg, e);
+    logs.push(errorMsg);
+  }
+  return logs;
+}
+
+// --- Scheduler (Runs every minute) ---
+cron.schedule('* * * * *', async () => {
+  await processReminders();
+});
+
+// --- Debug Trigger Endpoint ---
+app.post('/debug-trigger-check', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const logs = await processReminders();
+    res.json({ success: true, logs });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to trigger check', details: err.message });
   }
 });
 
