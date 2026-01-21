@@ -214,6 +214,43 @@ app.delete('/images/:id', async (req, res) => {
   }
 });
 
+// 4b. Update Image Metadata
+app.patch('/images/:id', async (req, res) => {
+  const { id } = req.params;
+  const { title, description, date } = req.body;
+
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    // Build context string for Cloudinary
+    const contextParts = [];
+    if (title !== undefined) contextParts.push(`title=${title}`);
+    if (description !== undefined) contextParts.push(`description=${description}`);
+    if (date !== undefined) contextParts.push(`date=${date}`);
+
+    if (contextParts.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    // Update using explicit with context
+    const result = await cloudinary.uploader.explicit(id, {
+      type: 'upload',
+      context: contextParts.join('|')
+    });
+
+    res.json({
+      success: true,
+      context: result.context,
+      message: 'Image updated'
+    });
+  } catch (error) {
+    console.error('Update Image Error:', error);
+    res.status(500).json({ error: 'Failed to update image', details: error.message });
+  }
+});
+
 // 5. Delete Album (Folder)
 app.delete('/albums/:name', async (req, res) => {
   const { name } = req.params;
@@ -239,6 +276,57 @@ app.delete('/albums/:name', async (req, res) => {
     // Check if error is "Folder not empty" or similar
     console.error('Delete Album Error:', error);
     res.status(500).json({ error: 'Failed to delete album', details: error.message });
+  }
+});
+
+// 6. Rename Album (Folder)
+app.patch('/albums/:name', async (req, res) => {
+  const { name } = req.params;
+  const { newName } = req.body;
+
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!newName || newName.trim() === '') {
+    return res.status(400).json({ error: 'New name is required' });
+  }
+
+  const oldPath = `photo-slider-app/${name}`;
+  const newPath = `photo-slider-app/${newName.trim()}`;
+
+  try {
+    // 1. Get all resources in old folder
+    const result = await cloudinary.api.resources({
+      type: 'upload',
+      prefix: oldPath + '/',
+      max_results: 500
+    });
+
+    if (result.resources.length === 0) {
+      return res.status(404).json({ error: 'Album not found or empty' });
+    }
+
+    // 2. Rename each resource (move to new folder)
+    for (const resource of result.resources) {
+      const oldPublicId = resource.public_id;
+      const filename = oldPublicId.split('/').pop();
+      const newPublicId = `${newPath}/${filename}`;
+
+      await cloudinary.uploader.rename(oldPublicId, newPublicId);
+    }
+
+    // 3. Delete old empty folder
+    try {
+      await cloudinary.api.delete_folder(oldPath);
+    } catch (e) {
+      // Folder might auto-delete when empty, ignore error
+    }
+
+    res.json({ success: true, newName: newName.trim() });
+  } catch (error) {
+    console.error('Rename Album Error:', error);
+    res.status(500).json({ error: 'Failed to rename album', details: error.message });
   }
 });
 

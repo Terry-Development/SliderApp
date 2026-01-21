@@ -52,14 +52,15 @@ export default function ImageSlider({ images }) {
                 effect={'coverflow'}
                 grabCursor={true}
                 centeredSlides={true}
-                slidesPerView={'auto'}
-                // Only loop if we have enough images (at least 5 for smooth coverflow loop)
-                loop={images.length >= 5}
-                // "Fan" Effect Config:
+                slidesPerView={1.15} // Show peek of next/prev slides
+                spaceBetween={-20} // Slight overlap for aesthetic
+                // Only loop if we have enough images (at least 3 for smooth loop)
+                loop={images.length >= 3}
+                // "Fan" Effect Config - Subtler for peek visibility:
                 coverflowEffect={{
-                    rotate: 30,
+                    rotate: 20,
                     stretch: 0,
-                    depth: 100,
+                    depth: 150,
                     modifier: 1,
                     slideShadows: true,
                 }}
@@ -73,22 +74,22 @@ export default function ImageSlider({ images }) {
                     '--swiper-pagination-bottom': '20px'
                 }}
             >
-                {images.map((img) => (
+                {images.map((img, index) => (
                     <SwiperSlide
                         key={img.id}
                         // Height: 55vh (Balanced mobile height)
-                        // Auto width with Max Width constraint
-                        className="!w-auto !h-[55vh] md:!h-[600px] transition-all"
+                        // Fixed width for consistent peek
+                        className="!w-[80vw] md:!w-[500px] !h-[55vh] md:!h-[600px] transition-all"
                     >
                         {({ isActive }) => (
                             <div
-                                className="h-full w-auto relative flex flex-col select-none"
+                                className="h-full w-full relative flex flex-col select-none"
                             >
-                                {/* Main Image */}
+                                {/* Main Image - Optimized for speed */}
                                 <img
-                                    src={img.url}
+                                    src={img.url.replace('/upload/', '/upload/q_auto,f_auto,w_800/')}
                                     alt={img.title}
-                                    loading="lazy"
+                                    loading={index < 3 ? "eager" : "lazy"}
                                     className="h-full w-auto max-w-[85vw] object-contain rounded-[2rem] shadow-2xl bg-zinc-900 border border-white/10"
                                 />
 
