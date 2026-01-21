@@ -577,8 +577,8 @@ export default function Reminders() {
                                                     <h3
                                                         onClick={() => toggleExpand(reminder.id)}
                                                         className={`font-semibold text-lg cursor-pointer transition-all ${expandedIds.has(reminder.id)
-                                                                ? 'whitespace-pre-wrap break-words'
-                                                                : 'truncate'
+                                                            ? 'whitespace-pre-wrap break-words'
+                                                            : 'truncate'
                                                             } ${reminder.isActive !== false
                                                                 ? 'text-white'
                                                                 : 'text-slate-400 decoration-slate-600 line-through'
@@ -610,37 +610,36 @@ export default function Reminders() {
                                                     {new Date(reminder.time).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                 </span>
                                             </div>
-                                        </div>
 
-                                        {/* Actions */}
-                                        <div className="flex items-center justify-between sm:justify-end gap-5 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5 mt-4 sm:mt-0">
-                                            {/* Toggle Switch */}
-                                            <button
-                                                onClick={() => handleToggle(reminder.id, reminder.isActive ?? true)}
-                                                className={`relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none focus:ring-offset-2 focus:ring-offset-black focus:ring-2 ${reminder.isActive !== false ? 'bg-gradient-to-r from-green-500 to-emerald-400 focus:ring-green-500' : 'bg-slate-700/50 focus:ring-slate-500'}`}
-                                                title="Toggle Active"
-                                            >
-                                                <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 transform ${reminder.isActive !== false ? 'translate-x-7 scale-110' : 'translate-x-0'}`} />
-                                            </button>
+                                            {/* Actions */}
+                                            <div className="flex items-center justify-between sm:justify-end gap-5 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5 mt-4 sm:mt-0">
+                                                {/* Toggle Switch */}
+                                                <button
+                                                    onClick={() => handleToggle(reminder.id, reminder.isActive ?? true)}
+                                                    className={`relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none focus:ring-offset-2 focus:ring-offset-black focus:ring-2 ${reminder.isActive !== false ? 'bg-gradient-to-r from-green-500 to-emerald-400 focus:ring-green-500' : 'bg-slate-700/50 focus:ring-slate-500'}`}
+                                                    title="Toggle Active"
+                                                >
+                                                    <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 transform ${reminder.isActive !== false ? 'translate-x-7 scale-110' : 'translate-x-0'}`} />
+                                                </button>
 
-                                            {/* Delete Button */}
-                                            <button
-                                                onClick={() => handleDelete(reminder.id)}
-                                                className="p-2.5 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
-                                                title="Delete"
-                                            >
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </button>
+                                                {/* Delete Button */}
+                                                <button
+                                                    onClick={() => handleDelete(reminder.id)}
+                                                    className="p-2.5 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+                                                    title="Delete"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
-                                    </div>
-                        ))
+                                ))
                             )}
+                        </div>
                     </div>
                 </div>
-        </div>
             </main >
         </div >
     );
