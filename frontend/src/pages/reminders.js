@@ -577,7 +577,7 @@ export default function Reminders() {
                                                     <h3
                                                         onClick={() => toggleExpand(reminder.id)}
                                                         className={`font-semibold text-lg cursor-pointer transition-all ${expandedIds.has(reminder.id)
-                                                            ? 'whitespace-pre-wrap break-words'
+                                                            ? 'whitespace-normal break-all'
                                                             : 'truncate'
                                                             } ${reminder.isActive !== false
                                                                 ? 'text-white'
