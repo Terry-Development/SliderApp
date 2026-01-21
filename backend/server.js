@@ -349,6 +349,10 @@ app.patch('/reminders/:id/toggle', async (req, res) => {
       }
 
       await writeJson(REMINDERS_FILE, reminders);
+
+      // TRIGGER CHECKS IMMEDIATELY (Fixes server sleep delay)
+      processReminders().catch(e => console.error('Immediate check failed:', e));
+
       res.json({ success: true, reminder });
     } else {
       res.status(404).json({ error: 'Not found' });
@@ -396,23 +400,32 @@ app.delete('/reminders/:id', async (req, res) => {
 async function processReminders() {
   const now = new Date();
   const logs = [];
-  logs.push(`[Scheduler] Checking reminders at Server Time: ${now.toISOString()}`);
+  logs.push(`[System] Server Time (UTC): ${now.toISOString().split('.')[0].replace('T', ' ')}`);
 
   try {
-    // 1. Fetch latest data from Cloud (Freshness is key)
+    // 1. Fetch latest data
     let reminders = await readJson(REMINDERS_FILE);
     let subs = await readJson(SUBS_FILE);
     let modified = false;
 
-    logs.push(`Loaded ${reminders.length} reminders and ${subs.length} subscriptions.`);
+    logs.push(`[Data] Loaded ${reminders.length} reminders, ${subs.length} subscriptions.`);
 
-    // 2. Process
+    // 2. Audit & Process
     reminders.forEach(reminder => {
-      // Skip inactive reminders
-      if (reminder.isActive === false) return;
-
       const reminderTime = new Date(reminder.time);
       const isDue = reminderTime <= now;
+      const timeDiff = Math.round((reminderTime - now) / 60000); // Minutes
+
+      // Detailed Log for Debugging
+      const status = !reminder.isActive ? 'INACTIVE ⚪'
+        : reminder.sent ? 'ALREADY SENT ✅'
+          : isDue ? 'DUE NOW 🔴'
+            : `PENDING (in ${timeDiff}m) ⏳`;
+
+      logs.push(`   - "${reminder.message}": ${status} [Target: ${reminderTime.toISOString().split('T')[1].substr(0, 5)}]`);
+
+      // Skip processing if not actionable
+      if (reminder.isActive === false) return;
 
       if (!reminder.sent && isDue) {
         // Time to send!
@@ -422,51 +435,56 @@ async function processReminders() {
         });
 
         // Send to ALL subscribers
-        subs.forEach(sub => {
-          webpush.sendNotification(sub, payload, { headers: { 'Urgency': 'high' } })
-            .catch(err => {
-              if (err.statusCode === 410 || err.statusCode === 404) {
-                console.log('Subscription expired');
-              } else {
-                console.error('Push error:', err);
-              }
-            });
-        });
+        let successCount = 0;
+        let failCount = 0;
 
-        const logMsg = `   -> SENT: ${reminder.message}`;
+        const pushPromises = subs.map(sub =>
+          webpush.sendNotification(sub, payload, { headers: { 'Urgency': 'high' } })
+            .then(() => successCount++)
+            .catch(err => {
+              failCount++;
+              if (err.statusCode === 410 || err.statusCode === 404) {
+                // optionally remove sub
+              }
+            })
+        );
+
+        // We don't await strictly for the cron, but for debug trigger we might want to wait a bit
+        // For simplicity in this sync-like loop, we just fire and forget, logging intent.
+
+        const logMsg = `   -> TRIGGERING PUSH: ${reminder.message}`;
         console.log(logMsg);
         logs.push(logMsg);
 
         // Update Logic
         if (reminder.repeatInterval && reminder.repeatInterval > 0) {
-          // Recurring
+          // Recurring logic...
           let nextTime = new Date(reminderTime.getTime() + reminder.repeatInterval * 60000);
           while (nextTime <= new Date()) {
             nextTime = new Date(nextTime.getTime() + reminder.repeatInterval * 60000);
           }
           reminder.time = nextTime.toISOString();
           reminder.sent = false;
-          const rescheduleMsg = `   -> Rescheduled for: ${reminder.time}`;
-          console.log(rescheduleMsg);
-          logs.push(rescheduleMsg);
+          logs.push(`   -> Rescheduled to: ${reminder.time}`);
         } else {
           // One-time
           reminder.sent = true;
+          logs.push(`   -> Marked as Sent`);
         }
 
         modified = true;
       }
     });
 
-    // 3. Save updates back to Cloud
+    // 3. Save updates
     if (modified) {
       await writeJson(REMINDERS_FILE, reminders);
-      logs.push('Updates saved to storage.');
+      logs.push('[System] Storage updated successfully.');
     } else {
-      logs.push('No due reminders found needing updates.');
+      logs.push('[System] No changes needed.');
     }
   } catch (e) {
-    const errorMsg = `[Scheduler] Error processing reminders: ${e.message}`;
+    const errorMsg = `[Error] ${e.message}`;
     console.error(errorMsg, e);
     logs.push(errorMsg);
   }
