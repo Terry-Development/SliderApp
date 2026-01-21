@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import Head from 'next/head';
 import Navbar from '../components/Navbar';
 import { urlBase64ToUint8Array } from '../utils/urlBase64ToUint8Array';
@@ -271,28 +272,75 @@ export default function Reminders() {
     };
 
     const handleToggle = async (id, currentStatus) => {
+        // Optimistic UI Update: Immediately toggle state
+        setReminders(prev => prev.map(r =>
+            r.id === id ? { ...r, isActive: !currentStatus } : r
+        ));
+
         try {
             await fetch(`${API_URL}/reminders/${id}/toggle`, {
                 method: 'PATCH',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ isActive: !currentStatus })
             });
-            fetchReminders();
+            // No need to refetch, state is already correct
         } catch (err) {
             console.error(err);
+            // Revert on error
+            setReminders(prev => prev.map(r =>
+                r.id === id ? { ...r, isActive: currentStatus } : r
+            ));
+            alert('Failed to update status');
         }
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('Delete reminder?')) return;
-        try {
-            await fetch(`${API_URL}/reminders/${id}`, {
-                method: 'DELETE',
-                headers: getAuthHeaders()
-            });
-            fetchReminders();
-        } catch (err) {
-            console.error(err);
+        const result = await Swal.fire({
+            title: 'Delete Reminder?',
+            text: "You won't be able to revert this!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, delete it!',
+            background: '#1a1a1a',
+            color: '#fff'
+        });
+
+        if (result.isConfirmed) {
+            // Optimistic Update: Remove immediately
+            const previousReminders = [...reminders];
+            setReminders(prev => prev.filter(r => r.id !== id));
+
+            try {
+                const res = await fetch(`${API_URL}/reminders/${id}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+
+                if (!res.ok) throw new Error('Failed to delete');
+
+                Swal.fire({
+                    title: 'Deleted!',
+                    text: 'Your reminder has been deleted.',
+                    icon: 'success',
+                    background: '#1a1a1a',
+                    color: '#fff',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            } catch (err) {
+                console.error(err);
+                // Revert
+                setReminders(previousReminders);
+                Swal.fire({
+                    title: 'Error',
+                    text: 'Failed to delete reminder.',
+                    icon: 'error',
+                    background: '#1a1a1a',
+                    color: '#fff'
+                });
+            }
         }
     };
 
