@@ -18,6 +18,7 @@ export default function Reminders() {
     const [permission, setPermission] = useState('default');
     const [loading, setLoading] = useState(false);
     const [showDebug, setShowDebug] = useState(false);
+    const [expandedIds, setExpandedIds] = useState(new Set());
 
     useEffect(() => {
         if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -295,6 +296,15 @@ export default function Reminders() {
         }
     };
 
+    const toggleExpand = (id) => {
+        setExpandedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
     const handleDelete = async (id) => {
         const result = await Swal.fire({
             title: 'Delete Reminder?',
@@ -563,49 +573,75 @@ export default function Reminders() {
                                         <div className="flex flex-col sm:flex-row sm:items-center gap-5 justify-between relative z-10">
                                             {/* Content */}
                                             <div className="flex-1 min-w-0">
-                                                <div className="flex items-baseline gap-3 mb-1">
-                                                    <h3 className={`font-semibold text-lg truncate ${reminder.isActive !== false ? 'text-white' : 'text-slate-400 decoration-slate-600 line-through'}`}>
+                                                <div className="flex items-start gap-2 mb-1">
+                                                    <h3
+                                                        onClick={() => toggleExpand(reminder.id)}
+                                                        className={`font-semibold text-lg cursor-pointer transition-all ${expandedIds.has(reminder.id)
+                                                                ? 'whitespace-pre-wrap break-words'
+                                                                : 'truncate'
+                                                            } ${reminder.isActive !== false
+                                                                ? 'text-white'
+                                                                : 'text-slate-400 decoration-slate-600 line-through'
+                                                            }`}
+                                                    >
                                                         {reminder.message}
                                                     </h3>
-                                                </div>
-                                                <div className="flex items-center gap-2 text-sm text-slate-400">
-                                                    <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                    <span>
-                                                        {new Date(reminder.time).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
-                                                </div>
-                                            </div>
 
-                                            {/* Actions */}
-                                            <div className="flex items-center justify-between sm:justify-end gap-5 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5 mt-4 sm:mt-0">
-                                                {/* Toggle Switch */}
-                                                <button
-                                                    onClick={() => handleToggle(reminder.id, reminder.isActive ?? true)}
-                                                    className={`relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none focus:ring-offset-2 focus:ring-offset-black focus:ring-2 ${reminder.isActive !== false ? 'bg-gradient-to-r from-green-500 to-emerald-400 focus:ring-green-500' : 'bg-slate-700/50 focus:ring-slate-500'}`}
-                                                    title="Toggle Active"
-                                                >
-                                                    <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 transform ${reminder.isActive !== false ? 'translate-x-7 scale-110' : 'translate-x-0'}`} />
-                                                </button>
-
-                                                {/* Delete Button */}
-                                                <button
-                                                    onClick={() => handleDelete(reminder.id)}
-                                                    className="p-2.5 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
-                                                    title="Delete"
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
-                                                </button>
+                                                    {/* Expand Toggle Button */}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleExpand(reminder.id);
+                                                        }}
+                                                        className="mt-1.5 p-0.5 rounded-full hover:bg-white/10 text-slate-500 hover:text-white transition-colors flex-shrink-0"
+                                                        aria-label={expandedIds.has(reminder.id) ? "Collapse" : "Expand"}
+                                                    >
+                                                        <svg
+                                                            className={`w-4 h-4 transition-transform duration-200 ${expandedIds.has(reminder.id) ? 'rotate-180' : ''}`}
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            viewBox="0 0 24 24"
+                                                        >
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <span>
+                                                    {new Date(reminder.time).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                </span>
                                             </div>
                                         </div>
+
+                                        {/* Actions */}
+                                        <div className="flex items-center justify-between sm:justify-end gap-5 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5 mt-4 sm:mt-0">
+                                            {/* Toggle Switch */}
+                                            <button
+                                                onClick={() => handleToggle(reminder.id, reminder.isActive ?? true)}
+                                                className={`relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none focus:ring-offset-2 focus:ring-offset-black focus:ring-2 ${reminder.isActive !== false ? 'bg-gradient-to-r from-green-500 to-emerald-400 focus:ring-green-500' : 'bg-slate-700/50 focus:ring-slate-500'}`}
+                                                title="Toggle Active"
+                                            >
+                                                <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 transform ${reminder.isActive !== false ? 'translate-x-7 scale-110' : 'translate-x-0'}`} />
+                                            </button>
+
+                                            {/* Delete Button */}
+                                            <button
+                                                onClick={() => handleDelete(reminder.id)}
+                                                className="p-2.5 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+                                                title="Delete"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
-                                ))
+                                    </div>
+                        ))
                             )}
-                        </div>
                     </div>
                 </div>
-            </main>
         </div>
+            </main >
+        </div >
     );
 }
