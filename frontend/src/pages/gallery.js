@@ -273,7 +273,7 @@ export default function Gallery() {
         setPendingUploads(prev => [...prev, ...newUploads]);
         // Default target album to current album if inside one
         if (currentAlbum) setTargetAlbum(currentAlbum);
-        else setTargetAlbum(''); // Reset if no album selected
+        // FIX: Do NOT reset targetAlbum here, otherwise if user typed a name before picking files, it disappears.
     };
 
     const updateUploadMetadata = (id, field, value) => {
