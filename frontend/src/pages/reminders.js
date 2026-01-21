@@ -17,6 +17,7 @@ export default function Reminders() {
     const [isRepeating, setIsRepeating] = useState(false);
     const [permission, setPermission] = useState('default');
     const [loading, setLoading] = useState(false);
+    const [showDebug, setShowDebug] = useState(false);
 
     useEffect(() => {
         if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -353,173 +354,254 @@ export default function Reminders() {
     };
 
     return (
-        <div className="min-h-screen bg-dark-bg text-white font-sans selection:bg-primary/30">
+        <div className="min-h-screen bg-dark-bg text-white font-sans selection:bg-primary/30 pb-20">
             <Head>
                 <title>Reminders | SliderApp</title>
             </Head>
 
             <Navbar />
 
-            <main className="pt-24 max-w-2xl mx-auto px-4 pb-12">
-                <header className="mb-8 flex items-center justify-between">
-                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600">
-                        Reminders
-                    </h1>
-                    <div className="flex gap-2">
+            <main className="pt-28 max-w-3xl mx-auto px-4 md:px-6">
+                {/* Header Section */}
+                <header className="mb-10 flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 pb-1">
+                                Reminders
+                            </h1>
+                            <p className="text-slate-400 text-sm mt-1">Never miss a moment</p>
+                        </div>
+
+                        {/* Developer Tools Toggle */}
                         <button
-                            onClick={handleTroubleshoot}
-                            className="px-3 py-2 text-xs bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 border border-yellow-500/20 rounded-lg transition-colors"
+                            onClick={() => setShowDebug(!showDebug)}
+                            className={`p-2 rounded-full transition-all duration-300 ${showDebug ? 'bg-white/10 text-white rotate-90' : 'text-white/20 hover:text-white/60'}`}
+                            title="Developer Options"
                         >
-                            Troubleshoot
-                        </button>
-                        <button
-                            onClick={subscribeToPush}
-                            className="btn-gradient px-4 py-2 text-sm"
-                        >
-                            {permission === 'granted' ? 'Re-Subscribe' : 'Enable Notifications'}
-                        </button>
-                        <button
-                            onClick={handleTestPush}
-                            className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 rounded-lg transition-colors border border-white/10"
-                        >
-                            Test Push
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
                         </button>
                     </div>
+
+                    {/* Developer Tools Panel (Hidden by default) */}
+                    {showDebug && (
+                        <div className="flex flex-wrap gap-2 p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-xl animate-in fade-in slide-in-from-top-2">
+                            <button
+                                onClick={handleTroubleshoot}
+                                className="px-3 py-1.5 text-xs font-semibold bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 border border-yellow-500/20 rounded-lg transition-colors flex items-center gap-2"
+                            >
+                                <span>🔧</span> Troubleshoot
+                            </button>
+                            <button
+                                onClick={handleTestPush}
+                                className="px-3 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/10 rounded-lg transition-colors flex items-center gap-2"
+                            >
+                                <span>🔔</span> Test Push
+                            </button>
+                            <button
+                                onClick={subscribeToPush}
+                                className={`px-3 py-1.5 text-xs font-semibold border rounded-lg transition-colors ${permission === 'granted' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-blue-600 text-white border-transparent'}`}
+                            >
+                                {permission === 'granted' ? '♻️ Re-Subscribe' : '✅ Enable Notifications'}
+                            </button>
+                        </div>
+                    )}
+
+                    {!showDebug && permission !== 'granted' && (
+                        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-between">
+                            <span className="text-sm text-blue-200">Get notified about new uploads</span>
+                            <button
+                                onClick={subscribeToPush}
+                                className="px-4 py-1.5 text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors shadow-lg shadow-blue-500/20"
+                            >
+                                Enable
+                            </button>
+                        </div>
+                    )}
                 </header>
 
-                <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 mb-8">
-                    <h2 className="text-xl font-semibold mb-4">New Reminder</h2>
-                    <form onSubmit={handleCreate} className="space-y-4">
-                        <div>
-                            <label className="block text-sm text-gray-400 mb-1">Message</label>
-                            <input
-                                type="text"
-                                value={message}
-                                onChange={(e) => setMessage(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors"
-                                placeholder="e.g. Check the gallery"
-                                required
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm text-gray-400 mb-1">Date & Time</label>
-                                <div className="flex flex-col sm:flex-row gap-2">
+                {/* Main Content Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+                    {/* Left Column: Create Form */}
+                    <div className="lg:col-span-5 order-2 lg:order-1">
+                        <div className="bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-6 md:p-8 sticky top-28">
+                            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                                <span className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">Wed</span>
+                                New Reminder
+                            </h2>
+
+                            <form onSubmit={handleCreate} className="space-y-5">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-slate-400 uppercase tracking-wider pl-1">Message</label>
                                     <input
-                                        type="date"
-                                        value={date}
-                                        onChange={(e) => setDate(e.target.value)}
-                                        className="w-full sm:flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white [color-scheme:dark]"
-                                        required
-                                    />
-                                    <input
-                                        type="time"
-                                        value={time}
-                                        onChange={(e) => setTime(e.target.value)}
-                                        className="w-full sm:w-32 bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white [color-scheme:dark]"
+                                        type="text"
+                                        value={message}
+                                        onChange={(e) => setMessage(e.target.value)}
+                                        className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all"
+                                        placeholder="What needs to be done?"
                                         required
                                     />
                                 </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm text-gray-400 mb-1">Repeat</label>
-                                <select
-                                    value={isRepeating ? 'custom' : 'no'}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (val === 'no') {
-                                            setIsRepeating(false);
-                                            setRepeatValue('');
-                                        } else {
-                                            setIsRepeating(true);
-                                        }
-                                    }}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white"
-                                >
-                                    <option value="no">Never</option>
-                                    <option value="custom">Enable Repeat...</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Custom Repeating Panel */}
-                        {isRepeating && (
-                            <div className="bg-white/5 p-4 rounded-lg border border-white/10 animate-fade-in-down">
-                                <label className="block text-sm text-gray-400 mb-2 font-medium text-blue-400">Repeat Every...</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        value={repeatValue}
-                                        onChange={(e) => setRepeatValue(e.target.value)}
-                                        className="w-24 bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-center"
-                                        placeholder="1"
-                                        required={isRepeating}
-                                    />
-                                    <select
-                                        value={repeatUnit}
-                                        onChange={(e) => setRepeatUnit(e.target.value)}
-                                        className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors text-white"
-                                    >
-                                        <option value="1">Minutes</option>
-                                        <option value="60">Hours</option>
-                                        <option value="1440">Days</option>
-                                    </select>
-                                </div>
-                            </div>
-                        )}
-
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full btn-gradient py-3 rounded-lg font-medium"
-                        >
-                            {loading ? 'Scheduling...' : 'Set Reminder'}
-                        </button>
-                    </form>
-                </div>
-
-                <div className="space-y-4">
-                    <h2 className="text-xl font-semibold">Active Reminders</h2>
-                    {reminders.length === 0 ? (
-                        <p className="text-gray-500 text-center py-8">No active reminders</p>
-                    ) : (
-                        reminders.map(reminder => (
-                            <div key={reminder.id} className={`bg-white/5 rounded-xl p-4 border flex items-center justify-between group transition-all ${reminder.isActive !== false ? 'border-white/10' : 'border-white/5 opacity-60'}`}>
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <p className={`font-medium text-lg ${reminder.isActive !== false ? 'text-white' : 'text-gray-500 line-through'}`}>{reminder.message}</p>
-                                        {reminder.repeatInterval > 0 && (
-                                            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30">
-                                                {formatInterval(reminder.repeatInterval)}
-                                            </span>
-                                        )}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                                        <label className="text-xs font-medium text-slate-400 uppercase tracking-wider pl-1">Date</label>
+                                        <input
+                                            type="date"
+                                            value={date}
+                                            onChange={(e) => setDate(e.target.value)}
+                                            className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all [color-scheme:dark]"
+                                            required
+                                        />
                                     </div>
-                                    <p className="text-sm text-gray-400">
-                                        {reminder.repeatInterval > 0 ? 'Next: ' : ''}
-                                        {new Date(reminder.time).toLocaleString()}
-                                    </p>
+                                    <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                                        <label className="text-xs font-medium text-slate-400 uppercase tracking-wider pl-1">Time</label>
+                                        <input
+                                            type="time"
+                                            value={time}
+                                            onChange={(e) => setTime(e.target.value)}
+                                            className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all [color-scheme:dark]"
+                                            required
+                                        />
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-4">
-                                    <button
-                                        onClick={() => handleToggle(reminder.id, reminder.isActive ?? true)}
-                                        className={`w-12 h-6 rounded-full p-1 transition-colors ${reminder.isActive !== false ? 'bg-green-500' : 'bg-gray-600'}`}
-                                    >
-                                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${reminder.isActive !== false ? 'translate-x-6' : 'translate-x-0'}`} />
-                                    </button>
 
-                                    <button
-                                        onClick={() => handleDelete(reminder.id)}
-                                        className="p-2 text-gray-500 hover:text-red-400 transition-colors"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                    </button>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-slate-400 uppercase tracking-wider pl-1">Repetition</label>
+                                    <div className="p-1 bg-black/30 rounded-xl border border-white/5 flex">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setIsRepeating(false); setRepeatValue(''); }}
+                                            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${!isRepeating ? 'bg-white/10 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                                        >
+                                            Once
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsRepeating(true)}
+                                            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${isRepeating ? 'bg-white/10 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                                        >
+                                            Repeat
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        ))
-                    )}
+
+                                {/* Custom Repeating Panel */}
+                                {isRepeating && (
+                                    <div className="p-4 bg-white/5 rounded-xl border border-white/10 animate-fade-in space-y-3">
+                                        <p className="text-sm text-center text-primary font-medium">Repeat Every...</p>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={repeatValue}
+                                                onChange={(e) => setRepeatValue(e.target.value)}
+                                                className="w-20 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-center text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                                placeholder="1"
+                                                required={isRepeating}
+                                            />
+                                            <select
+                                                value={repeatUnit}
+                                                onChange={(e) => setRepeatUnit(e.target.value)}
+                                                className="flex-1 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                            >
+                                                <option value="1">Minutes</option>
+                                                <option value="60">Hours</option>
+                                                <option value="1440">Days</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="w-full btn-gradient py-3.5 rounded-xl font-bold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                                >
+                                    {loading ? 'Scheduling...' : 'Set Reminder'}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    {/* Right Column: List */}
+                    <div className="lg:col-span-7 order-1 lg:order-2 space-y-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold">Upcoming</h2>
+                            <span className="text-xs font-medium px-2 py-1 bg-white/10 rounded-lg text-slate-300">{reminders.length} Active</span>
+                        </div>
+
+                        {/* List Items */}
+                        <div className="space-y-4">
+                            {reminders.length === 0 ? (
+                                <div className="text-center py-20 px-6 rounded-3xl bg-white/5 border border-white/5 border-dashed">
+                                    <div className="w-16 h-16 rounded-full bg-white/5 mx-auto flex items-center justify-center text-3xl mb-4">
+                                        🍃
+                                    </div>
+                                    <h3 className="text-lg font-medium text-white mb-1">No reminders yet</h3>
+                                    <p className="text-slate-500 text-sm">Add tasks you don't want to forget.</p>
+                                </div>
+                            ) : (
+                                reminders.map(reminder => (
+                                    <div
+                                        key={reminder.id}
+                                        className={`group relative overflow-hidden rounded-2xl p-5 border transition-all duration-300 hover:shadow-xl hover:scale-[1.01] ${reminder.isActive !== false ? 'bg-white/5 backdrop-blur-md border-white/10 hover:border-white/20 hover:bg-white/10' : 'bg-black/20 border-white/5 grayscale opacity-60'}`}
+                                    >
+                                        {/* Repeating Badge */}
+                                        {reminder.repeatInterval > 0 && (
+                                            <div className="absolute top-0 right-0 px-3 py-1 bg-gradient-to-bl from-blue-500/20 to-transparent rounded-bl-2xl border-b border-l border-white/5">
+                                                <span className="text-[10px] font-bold tracking-wider text-blue-300 uppercase">
+                                                    {formatInterval(reminder.repeatInterval)}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-5 justify-between relative z-10">
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-baseline gap-3 mb-1">
+                                                    <h3 className={`font-semibold text-lg truncate ${reminder.isActive !== false ? 'text-white' : 'text-slate-400 decoration-slate-600 line-through'}`}>
+                                                        {reminder.message}
+                                                    </h3>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-sm text-slate-400">
+                                                    <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                    <span>
+                                                        {new Date(reminder.time).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="flex items-center justify-between sm:justify-end gap-5 w-full sm:w-auto pt-4 sm:pt-0 border-t sm:border-t-0 border-white/5 mt-4 sm:mt-0">
+                                                {/* Toggle Switch */}
+                                                <button
+                                                    onClick={() => handleToggle(reminder.id, reminder.isActive ?? true)}
+                                                    className={`relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none focus:ring-offset-2 focus:ring-offset-black focus:ring-2 ${reminder.isActive !== false ? 'bg-gradient-to-r from-green-500 to-emerald-400 focus:ring-green-500' : 'bg-slate-700/50 focus:ring-slate-500'}`}
+                                                    title="Toggle Active"
+                                                >
+                                                    <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 transform ${reminder.isActive !== false ? 'translate-x-7 scale-110' : 'translate-x-0'}`} />
+                                                </button>
+
+                                                {/* Delete Button */}
+                                                <button
+                                                    onClick={() => handleDelete(reminder.id)}
+                                                    className="p-2.5 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+                                                    title="Delete"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
                 </div>
             </main>
         </div>
