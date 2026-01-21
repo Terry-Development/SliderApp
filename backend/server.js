@@ -411,7 +411,7 @@ async function processReminders() {
     logs.push(`[Data] Loaded ${reminders.length} reminders, ${subs.length} subscriptions.`);
 
     // 2. Audit & Process
-    reminders.forEach(reminder => {
+    for (const reminder of reminders) {
       const reminderTime = new Date(reminder.time);
       const isDue = reminderTime <= now;
       const timeDiff = Math.round((reminderTime - now) / 60000); // Minutes
@@ -425,7 +425,7 @@ async function processReminders() {
       logs.push(`   - "${reminder.message}": ${status} [Target: ${reminderTime.toISOString().split('T')[1].substr(0, 5)}]`);
 
       // Skip processing if not actionable
-      if (reminder.isActive === false) return;
+      if (reminder.isActive === false) continue;
 
       if (!reminder.sent && isDue) {
         // Time to send!
@@ -438,7 +438,7 @@ async function processReminders() {
         let successCount = 0;
         let failCount = 0;
 
-        const pushPromises = subs.map(sub =>
+        await Promise.all(subs.map(sub =>
           webpush.sendNotification(sub, payload, { headers: { 'Urgency': 'high' } })
             .then(() => successCount++)
             .catch(err => {
@@ -447,7 +447,7 @@ async function processReminders() {
                 // optionally remove sub
               }
             })
-        );
+        ));
 
         // We don't await strictly for the cron, but for debug trigger we might want to wait a bit
         // For simplicity in this sync-like loop, we just fire and forget, logging intent.
@@ -455,26 +455,31 @@ async function processReminders() {
         const logMsg = `   -> TRIGGERING PUSH: ${reminder.message}`;
         console.log(logMsg);
         logs.push(logMsg);
+        logs.push(`   -> Push Results: ${successCount} Sent, ${failCount} Failed.`);
 
-        // Update Logic
-        if (reminder.repeatInterval && reminder.repeatInterval > 0) {
-          // Recurring logic...
-          let nextTime = new Date(reminderTime.getTime() + reminder.repeatInterval * 60000);
-          while (nextTime <= new Date()) {
-            nextTime = new Date(nextTime.getTime() + reminder.repeatInterval * 60000);
+        // Critical: Only mark as sent/reschedule if we succeeded OR if there are no subs
+        if (successCount > 0 || subs.length === 0) {
+          // Update Logic
+          if (reminder.repeatInterval && reminder.repeatInterval > 0) {
+            // Recurring logic...
+            let nextTime = new Date(reminderTime.getTime() + reminder.repeatInterval * 60000);
+            while (nextTime <= new Date()) {
+              nextTime = new Date(nextTime.getTime() + reminder.repeatInterval * 60000);
+            }
+            reminder.time = nextTime.toISOString();
+            reminder.sent = false;
+            logs.push(`   -> Rescheduled to: ${reminder.time}`);
+          } else {
+            // One-time
+            reminder.sent = true;
+            logs.push(`   -> Marked as Sent`);
           }
-          reminder.time = nextTime.toISOString();
-          reminder.sent = false;
-          logs.push(`   -> Rescheduled to: ${reminder.time}`);
+          modified = true;
         } else {
-          // One-time
-          reminder.sent = true;
-          logs.push(`   -> Marked as Sent`);
+          logs.push(`   -> WARNING: All pushes failed (or 0 subs). NOT marking as sent. Will retry next check.`);
         }
-
-        modified = true;
       }
-    });
+    }
 
     // 3. Save updates
     if (modified) {
