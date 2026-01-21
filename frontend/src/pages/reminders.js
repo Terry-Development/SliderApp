@@ -256,18 +256,43 @@ export default function Reminders() {
             });
 
             if (res.ok) {
+                const newReminder = await res.json();
+                // Update list immediately (no refetch needed)
+                setReminders(prev => [...prev, newReminder]);
+
                 setMessage('');
                 setDate('');
                 setTime('');
                 setRepeatValue('');
                 setIsRepeating(false);
-                fetchReminders();
-                alert('Reminder set');
+
+                Swal.fire({
+                    title: 'Reminder Set!',
+                    text: 'I will notify you when it is time.',
+                    icon: 'success',
+                    background: '#1a1a1a',
+                    color: '#fff',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
             } else {
-                alert('Failed to set reminder');
+                Swal.fire({
+                    title: 'Error',
+                    text: 'Failed to set reminder.',
+                    icon: 'error',
+                    background: '#1a1a1a',
+                    color: '#fff'
+                });
             }
         } catch (err) {
             console.error(err);
+            Swal.fire({
+                title: 'Error',
+                text: 'Network error occurred.',
+                icon: 'error',
+                background: '#1a1a1a',
+                color: '#fff'
+            });
         } finally {
             setLoading(false);
         }
