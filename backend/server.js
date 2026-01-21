@@ -83,21 +83,31 @@ app.get('/debug-status', async (req, res) => {
 });
 
 // 2. Get Images (from specific folder or root)
+// 2. Get Images (from specific folder or root)
 app.get('/images', async (req, res) => {
   const { folder, limit } = req.query;
-  // Default to root folder if not specified, or specific subfolder
-  // Note: prefix must end with '/' to search *inside* folder, otherwise it searches by name prefix
-  const prefix = folder && folder !== 'All'
-    ? `photo-slider-app/${folder}/`
-    : 'photo-slider-app/';
+
+  // Construct search expression
+  // If folder is 'All' or undefined, search in base folder recursively
+  // If specific folder, search specifically in that folder
+  let expression = 'resource_type:image AND folder:photo-slider-app';
+
+  if (folder && folder !== 'All') {
+    // Note: Cloudinary folders are just prefixes. 
+    // To search exact folder we use folder:path/to/folder
+    expression = `resource_type:image AND folder="photo-slider-app/${folder}"`;
+  } else {
+    // For "All", we want everything under photo-slider-app/*
+    expression = `resource_type:image AND folder:photo-slider-app/*`;
+  }
 
   try {
-    const result = await cloudinary.api.resources({
-      type: 'upload',
-      prefix: prefix,
-      context: true,
-      max_results: limit ? parseInt(limit) : 100
-    });
+    const result = await cloudinary.search
+      .expression(expression)
+      .sort_by('created_at', 'desc') // Newest first!
+      .max_results(limit ? parseInt(limit) : 100)
+      .with_field('context')
+      .execute();
 
     const images = result.resources.map(img => ({
       id: img.public_id,
@@ -109,8 +119,8 @@ app.get('/images', async (req, res) => {
 
     res.json(images);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to fetch images' });
+    console.error('Search Error:', error);
+    res.status(500).json({ error: 'Failed to fetch images', details: error.message });
   }
 });
 
