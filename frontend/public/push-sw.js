@@ -27,6 +27,15 @@ self.addEventListener('push', function (event) {
     );
 });
 
+// Force SW to activate immediately
+self.addEventListener('install', function (event) {
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', function (event) {
+    event.waitUntil(clients.claim());
+});
+
 self.addEventListener('notificationclick', function (event) {
     event.notification.close();
 
