@@ -90,6 +90,8 @@ app.get('/images', async (req, res) => {
     ? `photo-slider-app/${folder}/`
     : 'photo-slider-app/';
 
+  res.header('Cache-Control', 'no-store'); // Prevent caching of the list
+
   try {
     const result = await cloudinary.api.resources({
       type: 'upload',
