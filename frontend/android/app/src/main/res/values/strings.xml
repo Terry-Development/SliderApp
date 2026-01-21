@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SliderApp</string>
+    <string name="title_activity_main">SliderApp</string>
+    <string name="package_name">com.sliderapp.terry</string>
+    <string name="custom_url_scheme">com.sliderapp.terry</string>
+</resources>

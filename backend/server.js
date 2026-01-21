@@ -439,7 +439,10 @@ async function processReminders() {
         let failCount = 0;
 
         await Promise.all(subs.map(sub =>
-          webpush.sendNotification(sub, payload, { headers: { 'Urgency': 'high' } })
+          webpush.sendNotification(sub, payload, {
+            headers: { 'Urgency': 'high' },
+            TTL: 86400 // Keep message alive for 24h if device is offline
+          })
             .then(() => successCount++)
             .catch(err => {
               failCount++;
