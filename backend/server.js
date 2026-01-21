@@ -123,8 +123,11 @@ app.get('/images', async (req, res) => {
 
 // 2b. Get Albums (Folders)
 app.get('/albums', async (req, res) => {
+  res.header('Cache-Control', 'no-store'); // Prevent caching
   try {
-    const result = await cloudinary.api.sub_folders('photo-slider-app');
+    const result = await cloudinary.api.sub_folders('photo-slider-app', {
+      max_results: 500
+    });
     const albums = result.folders.map(f => f.name);
     res.json(albums);
   } catch (error) {
