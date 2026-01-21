@@ -431,13 +431,38 @@ export default function Reminders() {
                             </button>
                             <button
                                 onClick={handleTestPush}
-                                className="px-3 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/10 rounded-lg transition-colors flex items-center gap-2"
+                                className="px-3 py-1.5 text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/0 rounded-lg transition-colors flex items-center gap-2"
                             >
                                 <span>🔔</span> Test Push
                             </button>
                             <button
+                                onClick={async () => {
+                                    setLoading(true);
+                                    try {
+                                        const res = await fetch(`${API_URL}/debug-trigger-check`, {
+                                            method: 'POST',
+                                            headers: getAuthHeaders()
+                                        });
+                                        const data = await res.json();
+                                        if (data.success) {
+                                            alert(`CHECK COMPLETE:\n\n${data.logs.join('\n')}`);
+                                        } else {
+                                            alert('Check Failed: ' + data.details);
+                                        }
+                                    } catch (err) {
+                                        alert('Network Error: ' + err.message);
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                }}
+                                disabled={loading}
+                                className="px-3 py-1.5 text-xs font-semibold bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-lg transition-colors flex items-center gap-2"
+                            >
+                                <span>🚀</span> Force Check Now
+                            </button>
+                            <button
                                 onClick={subscribeToPush}
-                                className={`px-3 py-1.5 text-xs font-semibold border rounded-lg transition-colors ${permission === 'granted' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-blue-600 text-white border-transparent'}`}
+                                className={`px-3 py-1.5 text-xs font-semibold border rounded-lg transition-colors ${permission === 'granted' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-600 text-white border-transparent'}`}
                             >
                                 {permission === 'granted' ? '♻️ Re-Subscribe' : '✅ Enable Notifications'}
                             </button>
