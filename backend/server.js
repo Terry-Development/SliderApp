@@ -93,6 +93,8 @@ app.get('/images', async (req, res) => {
 
   res.header('Cache-Control', 'no-store'); // CRITICAL FIX: Prevent browser caching
 
+  console.log('GET /images Request:', { folder, limit, prefix }); // DEBUG LOG
+
   try {
     const result = await cloudinary.api.resources({
       type: 'upload',
@@ -101,6 +103,8 @@ app.get('/images', async (req, res) => {
       max_results: 500, // CRITICAL FIX: Fetch more than 100
       direction: 'desc' // CRITICAL FIX: Newest first
     });
+
+    console.log(`GET /images: Found ${result.resources.length} images.`); // DEBUG LOG
 
     const images = result.resources.map(img => ({
       id: img.public_id,
