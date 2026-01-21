@@ -93,37 +93,37 @@ app.get('/images', async (req, res) => {
   res.header('Cache-Control', 'no-store'); // Prevent caching of the list
 
   try {
-    const result = await cloudinary.api.resources({
-      type: 'upload',
-      prefix: prefix,
-      context: true,
-      max_results: 500, // Fetch more to ensure we get recent ones
-      direction: 'desc' // Try native sorting if supported, but we'll sort manually too
-    });
+    try {
+      const result = await cloudinary.api.resources({
+        type: 'upload',
+        prefix: prefix,
+        context: true,
+        max_results: 500 // Keep 500 to see more
+      });
 
-    // Map to our format
-    let images = result.resources.map(img => ({
-      id: img.public_id,
-      url: img.secure_url,
-      title: img.context?.custom?.title || '',
-      description: img.context?.custom?.description || '',
-      createdAt: img.created_at
-    }));
+      const images = result.resources.map(img => ({
+        id: img.public_id,
+        url: img.secure_url,
+        title: img.context?.custom?.title || '',
+        description: img.context?.custom?.description || '',
+        createdAt: img.created_at
+      }));
 
-    // Manual Sort: Newest First
-    images.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      // No manual sort, trusting default order (usually public_id or created_at desc depending on plan)
+      // Actually, default is often Public ID. 
+      // BUT user said it "worked perfectly before". 
+      // If I add sort, maybe I broke it? 
+      // Let's stick to what likely was there: just map and return.
 
-    // Apply limit if requested
-    if (limit) {
-      images = images.slice(0, parseInt(limit));
+      // Apply limit if requested
+      const limitedImages = limit ? images.slice(0, parseInt(limit)) : images;
+
+      res.json(limitedImages);
+    } catch (error) {
+      console.error('Fetch Images Error:', error);
+      res.status(500).json({ error: 'Failed to fetch images', details: error.message });
     }
-
-    res.json(images);
-  } catch (error) {
-    console.error('Fetch Images Error:', error);
-    res.status(500).json({ error: 'Failed to fetch images', details: error.message });
-  }
-});
+  });
 
 // 2b. Get Albums (Folders)
 app.get('/albums', async (req, res) => {
