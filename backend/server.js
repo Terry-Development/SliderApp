@@ -91,12 +91,15 @@ app.get('/images', async (req, res) => {
     ? `photo-slider-app/${folder}/`
     : 'photo-slider-app/';
 
+  res.header('Cache-Control', 'no-store'); // CRITICAL FIX: Prevent browser caching
+
   try {
     const result = await cloudinary.api.resources({
       type: 'upload',
       prefix: prefix,
       context: true,
-      max_results: limit ? parseInt(limit) : 100
+      max_results: 500, // CRITICAL FIX: Fetch more than 100
+      direction: 'desc' // CRITICAL FIX: Newest first
     });
 
     const images = result.resources.map(img => ({
