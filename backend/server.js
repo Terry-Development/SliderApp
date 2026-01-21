@@ -345,19 +345,7 @@ app.patch('/reminders/:id/toggle', async (req, res) => {
           }
         }
 
-        // UX: Send immediate confirmation
-        try {
-          const subs = await readJson(SUBS_FILE);
-          const confirmPayload = JSON.stringify({
-            title: 'Reminder Resumed',
-            body: `Next alert at: ${new Date(reminder.time).toLocaleTimeString()}`,
-            icon: '/icon-192x192.png'
-          });
-          subs.forEach(sub => {
-            webpush.sendNotification(sub, confirmPayload, { headers: { 'Urgency': 'high' } })
-              .catch(e => console.error('Confirm push failed', e));
-          });
-        } catch (ignore) { }
+
       }
 
       await writeJson(REMINDERS_FILE, reminders);
