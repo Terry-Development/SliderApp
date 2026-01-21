@@ -74,44 +74,6 @@ app.get('/debug-dump', async (req, res) => {
     res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
-try {
-  const start = Date.now();
-
-  // Performance/Health Check
-  const subs = await readJson(SUBS_FILE);
-  const reminders = await readJson(REMINDERS_FILE);
-
-  // Verify Storage R/W
-  let storageTest = 'Skipped';
-  try {
-    const testId = `test_${Date.now()}`;
-    await writeJson('storage_test.json', { testId });
-
-    // Wait 2s for Cloudinary CDN to propagate
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    const readBack = await readJson('storage_test.json');
-    if (readBack.testId === testId) {
-      storageTest = 'OK';
-    } else {
-      storageTest = `FAILED (Mismatch: Expected ${testId}, Got ${readBack.testId})`;
-    }
-  } catch (e) {
-    storageTest = `ERROR (${e.message})`;
-  }
-
-  res.json({
-    serverTime: new Date().toISOString(),
-    subscriptionCount: subs.length,
-    reminderCount: reminders.length,
-    storageStatus: storageTest,
-    checkDuration: `${Date.now() - start}ms`,
-    success: true
-  });
-} catch (e) {
-  res.status(500).json({ error: e.message });
-}
-});
 
 // 2. Get Images (from specific folder or root)
 app.get('/images', async (req, res) => {
