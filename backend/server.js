@@ -43,43 +43,74 @@ app.get('/health', (req, res) => {
 
 // 1c. Debug Status (Enhanced)
 app.get('/debug-status', async (req, res) => {
+  res.json({ status: 'OK', time: new Date().toISOString() });
+});
+
+// 1d. Full Debug Dump (For User Diagnostics)
+app.get('/debug-dump', async (req, res) => {
+  res.header('Cache-Control', 'no-store');
   try {
-    const start = Date.now();
+    const foldersReq = cloudinary.api.sub_folders('photo-slider-app', { max_results: 500 });
+    const imagesReq = cloudinary.api.resources({
+      type: 'upload',
+      prefix: 'photo-slider-app/',
+      max_results: 100,
+      context: true
+    });
 
-    // Performance/Health Check
-    const subs = await readJson(SUBS_FILE);
-    const reminders = await readJson(REMINDERS_FILE);
-
-    // Verify Storage R/W
-    let storageTest = 'Skipped';
-    try {
-      const testId = `test_${Date.now()}`;
-      await writeJson('storage_test.json', { testId });
-
-      // Wait 2s for Cloudinary CDN to propagate
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const readBack = await readJson('storage_test.json');
-      if (readBack.testId === testId) {
-        storageTest = 'OK';
-      } else {
-        storageTest = `FAILED (Mismatch: Expected ${testId}, Got ${readBack.testId})`;
-      }
-    } catch (e) {
-      storageTest = `ERROR (${e.message})`;
-    }
+    const [folders, images] = await Promise.all([foldersReq, imagesReq]);
 
     res.json({
-      serverTime: new Date().toISOString(),
-      subscriptionCount: subs.length,
-      reminderCount: reminders.length,
-      storageStatus: storageTest,
-      checkDuration: `${Date.now() - start}ms`,
-      success: true
+      timestamp: new Date().toISOString(),
+      folders: folders.folders.map(f => f.name),
+      recent_images: images.resources.map(img => ({
+        public_id: img.public_id,
+        folder: img.folder, // Check this field!
+        created_at: img.created_at,
+        url: img.secure_url
+      }))
     });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+  } catch (error) {
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
+});
+try {
+  const start = Date.now();
+
+  // Performance/Health Check
+  const subs = await readJson(SUBS_FILE);
+  const reminders = await readJson(REMINDERS_FILE);
+
+  // Verify Storage R/W
+  let storageTest = 'Skipped';
+  try {
+    const testId = `test_${Date.now()}`;
+    await writeJson('storage_test.json', { testId });
+
+    // Wait 2s for Cloudinary CDN to propagate
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const readBack = await readJson('storage_test.json');
+    if (readBack.testId === testId) {
+      storageTest = 'OK';
+    } else {
+      storageTest = `FAILED (Mismatch: Expected ${testId}, Got ${readBack.testId})`;
+    }
+  } catch (e) {
+    storageTest = `ERROR (${e.message})`;
+  }
+
+  res.json({
+    serverTime: new Date().toISOString(),
+    subscriptionCount: subs.length,
+    reminderCount: reminders.length,
+    storageStatus: storageTest,
+    checkDuration: `${Date.now() - start}ms`,
+    success: true
+  });
+} catch (e) {
+  res.status(500).json({ error: e.message });
+}
 });
 
 // 2. Get Images (from specific folder or root)
