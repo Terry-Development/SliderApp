@@ -83,47 +83,36 @@ app.get('/debug-status', async (req, res) => {
 });
 
 // 2. Get Images (from specific folder or root)
-// 2. Get Images (from specific folder or root)
 app.get('/images', async (req, res) => {
   const { folder, limit } = req.query;
+  // Default to root folder if not specified, or specific subfolder
+  // Note: prefix must end with '/' to search *inside* folder, otherwise it searches by name prefix
   const prefix = folder && folder !== 'All'
     ? `photo-slider-app/${folder}/`
     : 'photo-slider-app/';
 
-  res.header('Cache-Control', 'no-store'); // Prevent caching of the list
-
   try {
-    try {
-      const result = await cloudinary.api.resources({
-        type: 'upload',
-        prefix: prefix,
-        context: true,
-        max_results: 500 // Keep 500 to see more
-      });
+    const result = await cloudinary.api.resources({
+      type: 'upload',
+      prefix: prefix,
+      context: true,
+      max_results: limit ? parseInt(limit) : 100
+    });
 
-      const images = result.resources.map(img => ({
-        id: img.public_id,
-        url: img.secure_url,
-        title: img.context?.custom?.title || '',
-        description: img.context?.custom?.description || '',
-        createdAt: img.created_at
-      }));
+    const images = result.resources.map(img => ({
+      id: img.public_id,
+      url: img.secure_url,
+      title: img.context?.custom?.title || '',
+      description: img.context?.custom?.description || '',
+      createdAt: img.created_at
+    }));
 
-      // No manual sort, trusting default order (usually public_id or created_at desc depending on plan)
-      // Actually, default is often Public ID. 
-      // BUT user said it "worked perfectly before". 
-      // If I add sort, maybe I broke it? 
-      // Let's stick to what likely was there: just map and return.
-
-      // Apply limit if requested
-      const limitedImages = limit ? images.slice(0, parseInt(limit)) : images;
-
-      res.json(limitedImages);
-    } catch (error) {
-      console.error('Fetch Images Error:', error);
-      res.status(500).json({ error: 'Failed to fetch images', details: error.message });
-    }
-  });
+    res.json(images);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch images' });
+  }
+});
 
 // 2b. Get Albums (Folders)
 app.get('/albums', async (req, res) => {
@@ -146,19 +135,8 @@ app.post('/images/upload', upload.single('image'), (req, res) => {
   const { title, description, folder } = req.body;
   const file = req.file;
 
-  if (!file) {
-    console.error('Upload Error: No file provided');
-    return res.status(400).json({ error: 'No image file provided' });
-  }
-
-  console.log('Upload Request:', {
-    filename: file.originalname,
-    size: file.size,
-    folder: folder || 'root'
-  });
-
+  if (!file) return res.status(400).json({ error: 'No image file provided' });
   if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
-    console.error('Upload Error: Unauthorized');
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -236,43 +214,6 @@ app.delete('/images/:id', async (req, res) => {
   }
 });
 
-// 4b. Update Image Metadata
-app.patch('/images/:id', async (req, res) => {
-  const { id } = req.params;
-  const { title, description, date } = req.body;
-
-  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  try {
-    // Build context string for Cloudinary
-    const contextParts = [];
-    if (title !== undefined) contextParts.push(`title=${title}`);
-    if (description !== undefined) contextParts.push(`description=${description}`);
-    if (date !== undefined) contextParts.push(`date=${date}`);
-
-    if (contextParts.length === 0) {
-      return res.status(400).json({ error: 'No fields to update' });
-    }
-
-    // Update using explicit with context
-    const result = await cloudinary.uploader.explicit(id, {
-      type: 'upload',
-      context: contextParts.join('|')
-    });
-
-    res.json({
-      success: true,
-      context: result.context,
-      message: 'Image updated'
-    });
-  } catch (error) {
-    console.error('Update Image Error:', error);
-    res.status(500).json({ error: 'Failed to update image', details: error.message });
-  }
-});
-
 // 5. Delete Album (Folder)
 app.delete('/albums/:name', async (req, res) => {
   const { name } = req.params;
@@ -298,57 +239,6 @@ app.delete('/albums/:name', async (req, res) => {
     // Check if error is "Folder not empty" or similar
     console.error('Delete Album Error:', error);
     res.status(500).json({ error: 'Failed to delete album', details: error.message });
-  }
-});
-
-// 6. Rename Album (Folder)
-app.patch('/albums/:name', async (req, res) => {
-  const { name } = req.params;
-  const { newName } = req.body;
-
-  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  if (!newName || newName.trim() === '') {
-    return res.status(400).json({ error: 'New name is required' });
-  }
-
-  const oldPath = `photo-slider-app/${name}`;
-  const newPath = `photo-slider-app/${newName.trim()}`;
-
-  try {
-    // 1. Get all resources in old folder
-    const result = await cloudinary.api.resources({
-      type: 'upload',
-      prefix: oldPath + '/',
-      max_results: 500
-    });
-
-    if (result.resources.length === 0) {
-      return res.status(404).json({ error: 'Album not found or empty' });
-    }
-
-    // 2. Rename each resource (move to new folder)
-    for (const resource of result.resources) {
-      const oldPublicId = resource.public_id;
-      const filename = oldPublicId.split('/').pop();
-      const newPublicId = `${newPath}/${filename}`;
-
-      await cloudinary.uploader.rename(oldPublicId, newPublicId);
-    }
-
-    // 3. Delete old empty folder
-    try {
-      await cloudinary.api.delete_folder(oldPath);
-    } catch (e) {
-      // Folder might auto-delete when empty, ignore error
-    }
-
-    res.json({ success: true, newName: newName.trim() });
-  } catch (error) {
-    console.error('Rename Album Error:', error);
-    res.status(500).json({ error: 'Failed to rename album', details: error.message });
   }
 });
 

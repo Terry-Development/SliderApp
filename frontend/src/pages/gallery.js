@@ -259,72 +259,6 @@ export default function Gallery() {
         }
     };
 
-    const handleRenameAlbum = async () => {
-        if (!currentAlbum) return;
-
-        const { value: newName } = await Swal.fire({
-            title: 'Rename Album',
-            input: 'text',
-            inputLabel: 'Enter new album name',
-            inputValue: currentAlbum,
-            showCancelButton: true,
-            background: '#1e1e1e',
-            color: '#fff',
-            inputValidator: (value) => {
-                if (!value || value.trim() === '') {
-                    return 'Please enter a name';
-                }
-                if (value.trim() === currentAlbum) {
-                    return 'Please enter a different name';
-                }
-            }
-        });
-
-        if (!newName) return;
-
-        try {
-            const res = await fetch(`${API_URL}/albums/${encodeURIComponent(currentAlbum)}`, {
-                method: 'PATCH',
-                headers: {
-                    ...getAuthHeaders(),
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ newName: newName.trim() })
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                Swal.fire({
-                    title: 'Renamed!',
-                    text: `Album renamed to "${data.newName}"`,
-                    icon: 'success',
-                    timer: 1500,
-                    showConfirmButton: false,
-                    background: '#1e1e1e',
-                    color: '#fff'
-                });
-                setCurrentAlbum(data.newName);
-                fetchImages(data.newName);
-            } else {
-                const data = await res.json();
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Rename Failed',
-                    text: data.details || data.error || 'Unknown error',
-                    background: '#1e1e1e',
-                    color: '#fff'
-                });
-            }
-        } catch (err) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: err.message,
-                background: '#1e1e1e',
-                color: '#fff'
-            });
-        }
-    };
 
     // --- Upload Logic ---
     const handleFileSelect = (e) => {
@@ -407,71 +341,6 @@ export default function Gallery() {
         setImages(prev => prev.filter(img => img.id !== id));
     };
 
-    const handleEditImage = async (img) => {
-        const { value: formValues } = await Swal.fire({
-            title: 'Edit Image',
-            html:
-                `<input id="swal-title" class="swal2-input" placeholder="Title" value="${img.title || ''}">` +
-                `<input id="swal-date" type="date" class="swal2-input" value="${img.createdAt ? img.createdAt.split('T')[0] : ''}">`,
-            focusConfirm: false,
-            showCancelButton: true,
-            background: '#1e1e1e',
-            color: '#fff',
-            preConfirm: () => {
-                return {
-                    title: document.getElementById('swal-title').value,
-                    date: document.getElementById('swal-date').value
-                };
-            }
-        });
-
-        if (!formValues) return;
-
-        try {
-            const res = await fetch(`${API_URL}/images/${encodeURIComponent(img.id)}`, {
-                method: 'PATCH',
-                headers: {
-                    ...getAuthHeaders(),
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    title: formValues.title,
-                    date: formValues.date
-                })
-            });
-
-            if (res.ok) {
-                Swal.fire({
-                    title: 'Updated!',
-                    icon: 'success',
-                    timer: 1500,
-                    showConfirmButton: false,
-                    background: '#1e1e1e',
-                    color: '#fff'
-                });
-                // Refresh images
-                fetchImages(currentAlbum);
-            } else {
-                const data = await res.json();
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Update Failed',
-                    text: data.details || data.error,
-                    background: '#1e1e1e',
-                    color: '#fff'
-                });
-            }
-        } catch (err) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: err.message,
-                background: '#1e1e1e',
-                color: '#fff'
-            });
-        }
-    };
-
     return (
         <AuthWrapper>
             <Head>
@@ -539,19 +408,7 @@ export default function Gallery() {
                                                     title="Delete Entire Album"
                                                 >
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                    <span>Delete</span>
-                                                </button>
-                                            )}
-
-                                            {/* Rename Album Button */}
-                                            {currentAlbum && (
-                                                <button
-                                                    onClick={handleRenameAlbum}
-                                                    className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 hover:border-blue-500/40 px-4 py-2 rounded-xl transition-all text-sm font-semibold flex items-center gap-2 whitespace-nowrap"
-                                                    title="Rename Album"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                                    <span>Rename</span>
+                                                    <span>Delete Album</span>
                                                 </button>
                                             )}
 
@@ -618,7 +475,6 @@ export default function Gallery() {
                         <GalleryGrid
                             images={images}
                             onDelete={handleDelete}
-                            onEdit={handleEditImage}
                             selectionMode={selectionMode}
                             selectedIds={selectedIds}
                             onToggleSelect={toggleSelection}
