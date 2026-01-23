@@ -435,12 +435,16 @@ app.post('/subscribe', async (req, res) => {
   const subscription = req.body;
 
   try {
-    let subs = await readJson(SUBS_FILE);
-    // Avoid duplicates
-    if (!subs.find(s => s.endpoint === subscription.endpoint)) {
-      subs.push(subscription);
-      await writeJson(SUBS_FILE, subs);
-    }
+    const db = await getDatabase();
+    const subsCollection = db.collection('subscriptions');
+
+    // Upsert subscription (update if exists, insert if not)
+    await subsCollection.updateOne(
+      { endpoint: subscription.endpoint },
+      { $set: { ...subscription, updatedAt: new Date() } },
+      { upsert: true }
+    );
+
     res.status(201).json({});
   } catch (err) {
     console.error('Subscribe Error:', err);
