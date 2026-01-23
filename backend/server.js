@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
+const fs = require('fs').promises;
+const path = require('path');
+const { getDatabase } = require('./db/mongodb');
 require('dotenv').config();
 
 const app = express();
@@ -50,27 +53,48 @@ app.get('/debug-status', async (req, res) => {
 app.get('/debug-dump', async (req, res) => {
   res.header('Cache-Control', 'no-store');
   try {
-    const foldersReq = cloudinary.api.sub_folders('photo-slider-app', { max_results: 500 });
-    const imagesReq = cloudinary.api.resources({
+    console.log('=== DEBUG DUMP REQUESTED ===');
+
+    // Get all folders
+    const foldersResult = await cloudinary.api.sub_folders('photo-slider-app', { max_results: 500 });
+    console.log('Found folders:', foldersResult.folders.map(f => f.name));
+
+    // Get all resources (including their folders)
+    const imagesResult = await cloudinary.api.resources({
       type: 'upload',
       prefix: 'photo-slider-app/',
-      max_results: 100,
+      max_results: 500,
       context: true
     });
 
-    const [folders, images] = await Promise.all([foldersReq, imagesReq]);
+    // Group images by folder
+    const imagesByFolder = {};
+    imagesResult.resources.forEach(img => {
+      const folderPath = img.folder || 'root';
+      if (!imagesByFolder[folderPath]) {
+        imagesByFolder[folderPath] = [];
+      }
+      imagesByFolder[folderPath].push({
+        public_id: img.public_id,
+        created_at: img.created_at
+      });
+    });
 
     res.json({
       timestamp: new Date().toISOString(),
-      folders: folders.folders.map(f => f.name),
-      recent_images: images.resources.map(img => ({
+      total_folders: foldersResult.folders.length,
+      folders: foldersResult.folders.map(f => f.name),
+      total_resources: imagesResult.resources.length,
+      images_by_folder: imagesByFolder,
+      recent_images: imagesResult.resources.slice(0, 10).map(img => ({
         public_id: img.public_id,
-        folder: img.folder, // Check this field!
+        folder: img.folder,
         created_at: img.created_at,
         url: img.secure_url
       }))
     });
   } catch (error) {
+    console.error('Debug dump error:', error);
     res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
@@ -104,7 +128,9 @@ app.get('/images', async (req, res) => {
       url: img.secure_url,
       title: img.context?.custom?.title || '',
       description: img.context?.custom?.description || '',
-      createdAt: img.created_at
+      title: img.context?.custom?.title || '',
+      description: img.context?.custom?.description || '',
+      createdAt: img.context?.custom?.date ? new Date(img.context.custom.date).toISOString() : img.created_at
     }));
 
     res.json(images);
@@ -118,10 +144,29 @@ app.get('/images', async (req, res) => {
 app.get('/albums', async (req, res) => {
   res.header('Cache-Control', 'no-store'); // Prevent caching
   try {
-    const result = await cloudinary.api.sub_folders('photo-slider-app', {
+    // CRITICAL FIX: Don't use sub_folders API - it's cached and doesn't update!
+    // Instead, get ALL resources and extract folder names from public_ids
+    const result = await cloudinary.api.resources({
+      type: 'upload',
+      prefix: 'photo-slider-app/',
       max_results: 500
     });
-    const albums = result.folders.map(f => f.name);
+
+    // Extract unique folder names from public_ids
+    const folderSet = new Set();
+    result.resources.forEach(resource => {
+      // public_id format: "photo-slider-app/AlbumName/filename"
+      const parts = resource.public_id.split('/');
+      if (parts.length >= 2) {
+        const albumName = parts[1]; // Get the folder name between photo-slider-app/ and filename
+        if (albumName) {
+          folderSet.add(albumName);
+        }
+      }
+    });
+
+    const albums = Array.from(folderSet).sort();
+    console.log('GET /albums: Found', albums.length, 'albums:', albums);
     res.json(albums);
   } catch (error) {
     console.error(error);
@@ -152,7 +197,7 @@ app.post('/images/upload', upload.single('image'), (req, res) => {
   const uploadStream = cloudinary.uploader.upload_stream(
     {
       folder: cloudinaryFolder,
-      context: `title=${title}|description=${description}`
+      context: `title=${title}|description=${description}|date=${req.body.date || ''}`
     },
     (error, result) => {
       if (error) {
@@ -242,6 +287,122 @@ app.delete('/albums/:name', async (req, res) => {
     // Check if error is "Folder not empty" or similar
     console.error('Delete Album Error:', error);
     res.status(500).json({ error: 'Failed to delete album', details: error.message });
+  }
+});
+
+// 4b. Update Image Metadata (Title, Description, Date)
+app.patch('/images/:id', async (req, res) => {
+  const { id } = req.params;
+  const { title, description, date } = req.body;
+
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const contextParts = [];
+    if (title !== undefined) contextParts.push(`title=${title}`);
+    if (description !== undefined) contextParts.push(`description=${description}`);
+    if (date !== undefined) contextParts.push(`date=${date}`);
+
+    if (contextParts.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    const result = await cloudinary.uploader.explicit(id, {
+      type: 'upload',
+      context: contextParts.join('|')
+    });
+
+    res.json({ success: true, context: result.context });
+  } catch (error) {
+    console.error('Update Image Error:', error);
+    res.status(500).json({ error: 'Failed to update image' });
+  }
+});
+
+// 6. Rename Album (Folder)
+app.patch('/albums/:name', async (req, res) => {
+  const { name } = req.params;
+  const { newName } = req.body;
+
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!newName || !newName.trim()) return res.status(400).json({ error: 'New name required' });
+
+  const oldPath = `photo-slider-app/${name}`;
+  const newPath = `photo-slider-app/${newName.trim()}`;
+
+  console.log('=== ALBUM RENAME REQUEST ===');
+  console.log('Old path:', oldPath);
+  console.log('New path:', newPath);
+
+  try {
+    // Step 1: Fetch all resources
+    const result = await cloudinary.api.resources({
+      type: 'upload',
+      prefix: oldPath + '/',
+      max_results: 500,
+      context: true
+    });
+
+    console.log(`Found ${result.resources.length} images`);
+
+    if (result.resources.length === 0) {
+      return res.status(404).json({ error: 'Album empty or not found' });
+    }
+
+    const movedImages = [];
+
+    // Step 2: Re-upload each to new location (this ACTUALLY changes the public_id)
+    for (const img of result.resources) {
+      const filename = img.public_id.split('/').pop();
+      const newPublicId = `${newPath}/${filename}`;
+
+      console.log(`  Moving: ${img.public_id} -> ${newPublicId}`);
+
+      const uploaded = await cloudinary.uploader.upload(img.secure_url, {
+        public_id: newPublicId,
+        resource_type: 'image',
+        overwrite: false,
+        context: img.context
+      });
+
+      movedImages.push({ old: img.public_id, new: uploaded.public_id });
+      console.log(`  ✓ Success (${movedImages.length}/${result.resources.length})`);
+    }
+
+    // Step 3: Delete old images
+    console.log('Deleting old images...');
+    for (const moved of movedImages) {
+      await cloudinary.uploader.destroy(moved.old);
+      console.log(`  ✓ Deleted: ${moved.old}`);
+    }
+
+    // Step 4: Delete old folder
+    try {
+      await cloudinary.api.delete_folder(oldPath);
+      console.log('✓ Deleted old folder');
+    } catch (e) {
+      console.warn('Folder delete warning:', e.message);
+    }
+
+    // Step 5: Wait for indexing
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    console.log('=== RENAME COMPLETE ===');
+    res.json({
+      success: true,
+      newName: newName.trim(),
+      movedCount: movedImages.length
+    });
+  } catch (error) {
+    console.error('=== RENAME FAILED ===');
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
+    res.status(500).json({ error: 'Rename failed', details: error.message });
   }
 });
 
@@ -554,6 +715,46 @@ app.post('/test-notification', async (req, res) => {
     res.json({ success: true, sent: successCount, failed: failCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Date Captions - MongoDB
+app.get('/date-captions/:date', async (req, res) => {
+  try {
+    const { date } = req.params;
+    const db = await getDatabase();
+    const collection = db.collection('date_captions');
+
+    const doc = await collection.findOne({ date });
+    res.json({ caption: doc ? doc.caption : '' });
+  } catch (err) {
+    console.error('Get caption error:', err);
+    res.json({ caption: '' });
+  }
+});
+
+// Save caption for a specific date
+app.post('/date-captions/:date', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const { date } = req.params;
+    const { caption } = req.body;
+    const db = await getDatabase();
+    const collection = db.collection('date_captions');
+
+    await collection.updateOne(
+      { date },
+      { $set: { date, caption, updatedAt: new Date() } },
+      { upsert: true }
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Save caption error:', error);
+    res.status(500).json({ error: 'Failed to save caption' });
   }
 });
 
