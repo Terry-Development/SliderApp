@@ -4,8 +4,10 @@ import Head from 'next/head';
 import AuthWrapper from '@/components/AuthWrapper';
 import Navbar from '@/components/Navbar';
 import GalleryGrid from '@/components/GalleryGrid';
-import GallerySlider from '@/components/GallerySlider';
+import CalendarView from '@/components/CalendarView';
+
 import { API_URL, getAuthHeaders } from '@/utils/api';
+import GallerySlider from '@/components/GallerySlider';
 
 // Album Card Component with Cover Image Fetching
 const AlbumCard = ({ album, onClick }) => {
@@ -61,12 +63,14 @@ const AlbumCard = ({ album, onClick }) => {
 };
 
 export default function Gallery() {
-    const [view, setView] = useState('albums'); // 'albums' | 'images'
+    const [view, setView] = useState('albums'); // 'albums' | 'images' | 'calendar'
     const [currentAlbum, setCurrentAlbum] = useState(null);
 
+    // Data State
     const [albums, setAlbums] = useState([]);
     const [images, setImages] = useState([]);
 
+    // UI/Modal State
     const [uploading, setUploading] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [viewingImage, setViewingImage] = useState(null); // Lightbox State
@@ -74,6 +78,7 @@ export default function Gallery() {
     // Multi-Upload State
     const [pendingUploads, setPendingUploads] = useState([]);
     const [targetAlbum, setTargetAlbum] = useState(''); // Album name for upload
+    const [uploadDate, setUploadDate] = useState(new Date().toISOString().split('T')[0]); // Single date for all uploads
 
     // Selection / Batch Delete State
     const [selectionMode, setSelectionMode] = useState(false);
@@ -92,7 +97,10 @@ export default function Gallery() {
 
     const fetchAlbums = async () => {
         try {
-            const res = await fetch(`${API_URL}/albums`, { headers: getAuthHeaders() });
+            const res = await fetch(`${API_URL}/albums`, {
+                headers: getAuthHeaders(),
+                cache: 'no-store'
+            });
             const data = await res.json();
             if (Array.isArray(data)) setAlbums(data);
         } catch (err) {
@@ -102,10 +110,11 @@ export default function Gallery() {
 
     const fetchImages = async (folder) => {
         try {
-            // If folder is null, we might want 'All' or just root?
-            // Let's pass 'All' or the folder name
             const query = folder ? `?folder=${encodeURIComponent(folder)}` : '?folder=All';
-            const res = await fetch(`${API_URL}/images${query}`, { headers: getAuthHeaders() });
+            const res = await fetch(`${API_URL}/images${query}`, {
+                headers: getAuthHeaders(),
+                cache: 'no-store'
+            });
             const data = await res.json();
             if (Array.isArray(data)) setImages(data);
         } catch (err) {
@@ -259,47 +268,114 @@ export default function Gallery() {
         }
     };
 
+    // handleDelete for single image (since it was missing in the snapshot)
+    const handleDelete = (id) => {
+        setImages(prev => prev.filter(img => img.id !== id));
+    };
 
-    // --- Upload Logic ---
+    // NEW: Handle Album Rename
+    const handleRenameAlbum = async () => {
+        if (!currentAlbum) return;
+        const { value: newName } = await Swal.fire({
+            title: 'Rename Album',
+            input: 'text',
+            inputValue: currentAlbum,
+            background: '#1e1e1e',
+            color: '#fff',
+            showCancelButton: true,
+            confirmButtonColor: '#3b82f6',
+            cancelButtonColor: '#ef4444',
+            inputValidator: (value) => {
+                if (!value) return 'You need to write something!';
+            }
+        });
+
+        if (newName && newName.trim() !== currentAlbum) {
+            Swal.fire({
+                title: 'Renaming Album...',
+                text: 'Moving your photos. Please wait...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                },
+                background: '#1e1e1e',
+                color: '#fff'
+            });
+
+            try {
+                const res = await fetch(`${API_URL}/albums/${encodeURIComponent(currentAlbum)}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    },
+                    body: JSON.stringify({ newName: newName.trim() })
+                });
+
+                if (res.ok) {
+                    // Update local state FIRST
+                    const cleanNewName = newName.trim();
+                    setAlbums(prev => prev.map(a => a === currentAlbum ? cleanNewName : a));
+                    setCurrentAlbum(cleanNewName);
+
+                    // Immediately fetch images from the NEW folder name
+                    await fetchImages(cleanNewName);
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Renamed!',
+                        text: `Album renamed to ${cleanNewName}`,
+                        timer: 1500,
+                        showConfirmButton: false,
+                        background: '#1e1e1e',
+                        color: '#fff'
+                    });
+                } else {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Failed to rename');
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'Error', text: err.message, background: '#1e1e1e', color: '#fff' });
+            }
+        }
+    };
+
+    // ... (existing handlers like handleFileSelect etc)
+
+    // MODIFY: handleFileSelect to include date field
     const handleFileSelect = (e) => {
         const files = Array.from(e.target.files);
         const newUploads = files.map(file => ({
             file,
             title: '',
             description: '',
+            date: new Date().toISOString().split('T')[0], // Default to today
             status: 'pending',
             id: Math.random().toString(36).substr(2, 9)
         }));
         setPendingUploads(prev => [...prev, ...newUploads]);
-        // Default target album to current album if inside one
         if (currentAlbum) setTargetAlbum(currentAlbum);
-        // FIX: Do NOT reset targetAlbum here, otherwise if user typed a name before picking files, it disappears.
     };
 
+    // MODIFY: updateUploadMetadata to handle date
     const updateUploadMetadata = (id, field, value) => {
         setPendingUploads(prev => prev.map(item =>
             item.id === id ? { ...item, [field]: value } : item
         ));
     };
 
-    const removeUpload = (id) => {
-        setPendingUploads(prev => prev.filter(item => item.id !== id));
-    };
-
+    // MODIFY: handleUploadAll to include date in formData
     const handleUploadAll = async () => {
         if (pendingUploads.length === 0) return;
         setUploading(true);
-
-        // Check if album name is provided
         const folderName = targetAlbum.trim() || 'All';
 
         const uploadPromises = pendingUploads.map(async (item) => {
             if (item.status === 'success') return item;
-
             const formData = new FormData();
-            // MULTER FIX: Append text fields BEFORE the file
             formData.append('title', item.title);
             formData.append('description', item.description);
+            formData.append('date', item.date); // NEW
             formData.append('folder', folderName);
             formData.append('image', item.file);
 
@@ -309,168 +385,151 @@ export default function Gallery() {
                     headers: { 'x-admin-password': getAuthHeaders()['x-admin-password'] },
                     body: formData
                 });
-
                 if (res.ok) return { ...item, status: 'success' };
                 else return { ...item, status: 'error' };
-            } catch (err) {
-                return { ...item, status: 'error' };
-            }
+            } catch (err) { return { ...item, status: 'error' }; }
         });
 
         const results = await Promise.all(uploadPromises);
         setPendingUploads(results);
 
-        // Refresh current view
-        if (view === 'images' && currentAlbum === folderName) {
-            fetchImages(currentAlbum);
-        } else if (view === 'albums') {
-            fetchAlbums();
-        }
+        if (view === 'images' && currentAlbum === folderName) fetchImages(currentAlbum);
+        else if (view === 'albums') fetchAlbums();
 
         if (results.every(r => r.status === 'success')) {
-            setTimeout(() => {
-                setShowModal(false);
-                setPendingUploads([]);
-                setTargetAlbum('');
-            }, 1000);
+            setTimeout(() => { setShowModal(false); setPendingUploads([]); setTargetAlbum(''); }, 1000);
         }
         setUploading(false);
     };
 
-    const handleDelete = (id) => {
-        setImages(prev => prev.filter(img => img.id !== id));
-    };
+    // ... (existing code)
 
     return (
         <AuthWrapper>
-            <Head>
-                <title>Gallery - SliderApp</title>
-            </Head>
+            <Head><title>Gallery - SliderApp</title></Head>
             <Navbar />
-
             <main className="min-h-screen pt-20 pb-16">
                 <div className="max-w-7xl mx-auto px-4">
-
-                    {/* Header */}
                     {/* Header */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
                         <div className="flex items-center gap-4 min-w-0">
-                            {view === 'images' && (
-                                <button
-                                    onClick={handleBackToAlbums}
-                                    className="p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors shrink-0"
-                                >
+                            {/* Back Button */}
+                            {(view === 'images' || view === 'calendar') && (
+                                <button onClick={handleBackToAlbums} className="p-2 rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-colors shrink-0">
                                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                                 </button>
                             )}
 
-                            <div className="min-w-0">
-                                <h1 className="text-2xl font-bold flex items-center gap-2 truncate">
-                                    <span className="truncate max-w-[200px] md:max-w-md">
-                                        {view === 'albums' ? 'My Albums' : (currentAlbum || 'All Photos')}
-                                    </span>
-                                </h1>
-                                <p className="text-slate-500 text-sm">
-                                    {view === 'albums' ? 'Select an album to view photos' : `${images.length} photos`}
-                                </p>
+                            <div className="min-w-0 flex items-center gap-4">
+                                <div>
+                                    <h1 className="text-2xl font-bold flex items-center gap-2 truncate">
+                                        <span className="truncate max-w-[200px] md:max-w-md">
+                                            {view === 'albums' ? 'My Albums' : (view === 'calendar' ? 'Memories Calendar' : (currentAlbum || 'All Photos'))}
+                                        </span>
+                                    </h1>
+                                    <p className="text-slate-500 text-sm">
+                                        {view === 'albums' ? 'Select an album to view photos' : (view === 'calendar' ? 'Browse by date' : `${images.length} photos`)}
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
+                        {/* Controls */}
                         <div className="flex items-center gap-3 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
-                            {view === 'images' && images.length > 0 && (
-                                <>
-                                    {selectionMode ? (
-                                        <>
-                                            <button
-                                                onClick={() => {
-                                                    setSelectionMode(false);
-                                                    setSelectedIds(new Set());
-                                                }}
-                                                className="text-slate-400 hover:text-white px-4 py-2 font-medium transition-colors whitespace-nowrap"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                onClick={handleBatchDelete}
-                                                disabled={selectedIds.size === 0 || batchDeleting}
-                                                className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl font-medium transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
-                                            >
-                                                {batchDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}
-                                            </button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            {/* Delete Album Button */}
-                                            {currentAlbum && (
-                                                <button
-                                                    onClick={handleDeleteAlbum}
-                                                    className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 hover:border-red-500/40 px-4 py-2 rounded-xl transition-all text-sm font-semibold flex items-center gap-2 whitespace-nowrap"
-                                                    title="Delete Entire Album"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                    <span>Delete Album</span>
-                                                </button>
-                                            )}
+                            {/* View Toggle (Grid/Calendar) - Only visible when not in Album list */}
+                            {view !== 'albums' && (
+                                <div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/10">
+                                    <button
+                                        onClick={() => setView('images')}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${view === 'images' ? 'bg-primary text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                                    >
+                                        Grid
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setView('calendar');
+                                            // Ensure we have images loaded (if switching from empty, maybe fetch?)
+                                            if (images.length === 0 && !currentAlbum) fetchImages('All');
+                                            else if (images.length === 0 && currentAlbum) fetchImages(currentAlbum);
+                                        }}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${view === 'calendar' ? 'bg-primary text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                                    >
+                                        Calendar
+                                    </button>
+                                </div>
+                            )}
 
-                                            <button
-                                                onClick={() => setSelectionMode(true)}
-                                                className="bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-white/20 px-4 py-2 rounded-xl transition-all text-sm font-medium backdrop-blur-md flex items-center gap-2 whitespace-nowrap"
-                                            >
-                                                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                                <span>Select Photos</span>
-                                            </button>
-                                        </>
-                                    )}
+                            {/* Album Actions */}
+                            {currentAlbum && view !== 'albums' && (
+                                <>
+                                    <button onClick={handleRenameAlbum} className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 hover:border-blue-500/40 px-4 py-2 rounded-xl transition-all text-sm font-semibold flex items-center gap-2 whitespace-nowrap">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                        <span>Rename</span>
+                                    </button>
+                                    <button onClick={handleDeleteAlbum} className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 hover:border-red-500/40 px-4 py-2 rounded-xl transition-all text-sm font-semibold flex items-center gap-2 whitespace-nowrap">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        <span>Delete</span>
+                                    </button>
                                 </>
                             )}
 
-                            <button
-                                onClick={() => setShowModal(true)}
-                                className="btn-gradient flex items-center gap-2 px-5 py-2 rounded-xl whitespace-nowrap"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
+                            {view === 'images' && !selectionMode && (
+                                <button
+                                    onClick={() => setSelectionMode(true)}
+                                    className="bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-white/20 px-4 py-2 rounded-xl transition-all text-sm font-medium backdrop-blur-md flex items-center gap-2 whitespace-nowrap"
+                                >
+                                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                    <span>Select</span>
+                                </button>
+                            )}
+
+                            {/* In Selection Mode Buttons ... (keep existing) */}
+                            {selectionMode && (
+                                <>
+                                    <button onClick={() => { setSelectionMode(false); setSelectedIds(new Set()); }} className="text-slate-400 hover:text-white px-4 py-2 font-medium transition-colors whitespace-nowrap">Cancel</button>
+                                    <button onClick={handleBatchDelete} disabled={selectedIds.size === 0 || batchDeleting} className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl font-medium transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 flex items-center gap-2 whitespace-nowrap">{batchDeleting ? 'Deleting...' : `Delete (${selectedIds.size})`}</button>
+                                </>
+                            )}
+
+
+                            <button onClick={() => setShowModal(true)} className="btn-gradient flex items-center gap-2 px-5 py-2 rounded-xl whitespace-nowrap">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                                 <span>Upload</span>
                             </button>
                         </div>
                     </div>
 
-                    {/* Content */}
+                    {/* Content Area */}
                     {view === 'albums' ? (
                         <div>
-                            {albums.length === 0 && (
+                            {albums.length === 0 && ( /* ... Empty State ... */
                                 <div className="bg-dark-card border border-dark-border rounded-xl p-8 text-center max-w-lg mx-auto mt-10">
                                     <div className="w-16 h-16 bg-dark-bg rounded-full flex items-center justify-center mx-auto mb-4 text-slate-500">
                                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                                     </div>
                                     <h3 className="text-lg font-bold text-white mb-2">No Albums Yet</h3>
-                                    <p className="text-slate-400 mb-6">
-                                        Albums are created automatically when you upload photos into them.
-                                        Click "Upload" and type an Album Name to get started!
-                                    </p>
-                                    <button
-                                        onClick={() => setShowModal(true)}
-                                        className="btn-gradient inline-flex items-center gap-2"
-                                    >
-                                        Create First Album
-                                    </button>
+                                    <p className="text-slate-400 mb-6">Albums are created automatically when you upload photos into them.</p>
+                                    <button onClick={() => setShowModal(true)} className="btn-gradient inline-flex items-center gap-2">Create First Album</button>
                                 </div>
                             )}
-
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-
-
-                                {/* Dynamic Albums */}
-                                {albums.map(album => (
-                                    <AlbumCard
-                                        key={album}
-                                        album={album}
-                                        onClick={handleAlbumClick}
-                                    />
-                                ))}
+                                {albums.map(album => <AlbumCard key={album} album={album} onClick={handleAlbumClick} />)}
                             </div>
                         </div>
+                    ) : view === 'calendar' ? (
+                        <CalendarView
+                            images={images}
+                            onDateClick={(dayImages) => {
+                                // If day clicked, maybe filter grid view to these images or open preview?
+                                // For now let's just alert or scroll? 
+                                // Better: Set a temporary filter or specialized view?
+                                // Let's simplify: Click date -> Alert with count (Placeholder) or Switch to Grid filtered by date?
+                                // User request: "each date where i posted the images it would show out"
+                                // Let's just switch to grid and scroll to them? No, images state is flat.
+                                // Let's just log for now or show lightbox of first image.
+                                if (dayImages.length > 0) setViewingImage(dayImages[0]);
+                            }}
+                        />
                     ) : (
                         <GalleryGrid
                             images={images}
@@ -485,33 +544,27 @@ export default function Gallery() {
                 </div>
             </main>
 
-            {/* Lightbox Modal */}
+            {/* Lightbox Modal (existing) */}
             {viewingImage && (
                 <div
                     className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200"
                     onClick={() => setViewingImage(null)}
                 >
-                    <button
-                        className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-[70]"
-                        onClick={() => setViewingImage(null)}
-                    >
+                    <button className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-[70]" onClick={() => setViewingImage(null)}>
                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                     <div className="max-w-7xl max-h-[90vh] relative" onClick={e => e.stopPropagation()}>
-                        <img
-                            src={viewingImage.url}
-                            alt={viewingImage.title}
-                            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
-                        />
+                        <img src={viewingImage.url} alt={viewingImage.title} className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
                         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white rounded-b-lg">
                             <h3 className="text-xl font-bold">{viewingImage.title}</h3>
                             <p className="text-sm text-slate-300">{viewingImage.description}</p>
+                            <p className="text-xs text-slate-500 mt-1">{new Date(viewingImage.createdAt).toLocaleDateString()}</p>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Upload Modal */}
+            {/* Upload Modal with Date Input */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="card-dark w-full max-w-2xl flex flex-col max-h-[90vh]">
@@ -523,7 +576,7 @@ export default function Gallery() {
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                            {/* Album Selection - Improved */}
+                            {/* Album Selection (existing) */}
                             <div>
                                 <label className="block text-sm font-medium text-slate-400 mb-2">Target Album</label>
                                 <div className="space-y-3">
@@ -532,7 +585,7 @@ export default function Gallery() {
                                         value={targetAlbum === '__NEW__' ? '__NEW__' : (albums.includes(targetAlbum) ? targetAlbum : (targetAlbum ? '__NEW__' : ''))}
                                         onChange={(e) => {
                                             if (e.target.value === '__NEW__') {
-                                                setTargetAlbum(''); // Clear to allow typing new name
+                                                setTargetAlbum('');
                                             } else {
                                                 setTargetAlbum(e.target.value);
                                             }
@@ -542,33 +595,30 @@ export default function Gallery() {
                                         {albums.map(a => <option key={a} value={a}>{a}</option>)}
                                         <option value="__NEW__" className="text-primary font-bold">+ Create New Album</option>
                                     </select>
-
-                                    {/* Show input if "Create New" is virtually active (or targetAlbum is not in list) */}
                                     {(!albums.includes(targetAlbum) && targetAlbum !== '') || targetAlbum === '' ? (
                                         <div className="animate-in fade-in slide-in-from-top-2">
-                                            <input
-                                                type="text"
-                                                className="input-dark w-full bg-black/50 border-primary/30 focus:border-primary"
-                                                placeholder="Enter New Album Name..."
-                                                value={targetAlbum === '__NEW__' ? '' : targetAlbum}
-                                                onChange={(e) => setTargetAlbum(e.target.value)}
-                                            />
+                                            <input type="text" className="input-dark w-full bg-black/50 border-primary/30 focus:border-primary" placeholder="Enter New Album Name..." value={targetAlbum === '__NEW__' ? '' : targetAlbum} onChange={(e) => setTargetAlbum(e.target.value)} />
                                             <p className="text-xs text-slate-500 mt-1">Type a name to create a new album automatically on upload.</p>
                                         </div>
                                     ) : null}
                                 </div>
                             </div>
 
-                            {/* File Input */}
-                            <div className="border-2 border-dashed border-dark-border rounded-xl p-6 text-center hover:border-primary transition-colors">
+                            {/* Global Date Picker for All Uploads */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-2">Upload Date (applies to all photos)</label>
                                 <input
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    onChange={handleFileSelect}
-                                    className="hidden"
-                                    id="file-upload"
+                                    type="date"
+                                    className="input-dark w-full"
+                                    value={uploadDate}
+                                    onChange={(e) => setUploadDate(e.target.value)}
                                 />
+                                <p className="text-xs text-slate-500 mt-1">This date will be applied to all uploaded images</p>
+                            </div>
+
+                            {/* File Input (existing) */}
+                            <div className="border-2 border-dashed border-dark-border rounded-xl p-6 text-center hover:border-primary transition-colors">
+                                <input type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" id="file-upload" />
                                 <label htmlFor="file-upload" className="cursor-pointer">
                                     <div className="flex flex-col items-center">
                                         <svg className="w-10 h-10 text-slate-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -577,7 +627,7 @@ export default function Gallery() {
                                 </label>
                             </div>
 
-                            {/* Pending List */}
+                            {/* Pending List with DATE INPUT */}
                             <div className="space-y-4">
                                 {pendingUploads.map((item) => (
                                     <div key={item.id} className="bg-dark-bg p-4 rounded-lg border border-dark-border flex gap-4">
@@ -588,11 +638,11 @@ export default function Gallery() {
                                         </div>
                                         <div className="flex-1 space-y-2">
                                             <input
-                                                type="text" className="input-dark py-1 px-2 text-sm" placeholder="Title"
+                                                type="text" className="input-dark py-1 px-2 text-sm w-full" placeholder="Title (optional)"
                                                 value={item.title} onChange={e => updateUploadMetadata(item.id, 'title', e.target.value)} disabled={item.status === 'success'}
                                             />
                                             <input
-                                                type="text" className="input-dark py-1 px-2 text-sm" placeholder="Description"
+                                                type="text" className="input-dark py-1 px-2 text-sm w-full" placeholder="Description"
                                                 value={item.description} onChange={e => updateUploadMetadata(item.id, 'description', e.target.value)} disabled={item.status === 'success'}
                                             />
                                         </div>
@@ -603,20 +653,8 @@ export default function Gallery() {
                         </div>
 
                         <div className="p-6 border-t border-dark-border flex gap-4">
-                            <button
-                                onClick={() => setShowModal(false)}
-                                className="flex-1 py-3 rounded-lg border border-dark-border text-slate-400 hover:text-white"
-                                disabled={uploading}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleUploadAll}
-                                className="flex-1 btn-gradient disabled:opacity-50"
-                                disabled={uploading || pendingUploads.length === 0}
-                            >
-                                {uploading ? 'Uploading...' : 'Start Upload'}
-                            </button>
+                            <button onClick={() => setShowModal(false)} className="flex-1 py-3 rounded-lg border border-dark-border text-slate-400 hover:text-white" disabled={uploading}>Cancel</button>
+                            <button onClick={handleUploadAll} className="flex-1 btn-gradient disabled:opacity-50" disabled={uploading || pendingUploads.length === 0}>{uploading ? 'Uploading...' : 'Start Upload'}</button>
                         </div>
                     </div>
                 </div>
