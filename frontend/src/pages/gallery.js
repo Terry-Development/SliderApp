@@ -375,7 +375,7 @@ export default function Gallery() {
             const formData = new FormData();
             formData.append('title', item.title);
             formData.append('description', item.description);
-            formData.append('date', item.date); // NEW
+            formData.append('date', uploadDate); // CORRECTED: Use global uploadDate
             formData.append('folder', folderName);
             formData.append('image', item.file);
 
