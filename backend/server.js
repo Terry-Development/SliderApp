@@ -684,6 +684,129 @@ app.post('/date-captions/:date', async (req, res) => {
   }
 });
 
+// --- Relationship Dashboard Routes (MongoDB) ---
+
+// Get Relationship Data (Anniversary + Custom Events)
+app.get('/relationship/data', async (req, res) => {
+  try {
+    const db = await getDatabase();
+    const collection = db.collection('relationship_data');
+
+    // Fetch generic data doc (using a fixed ID 'main' for simplicity per user request)
+    const data = await collection.findOne({ _id: 'main' });
+
+    if (!data) {
+      return res.json({
+        anniversaryDate: '',
+        events: []
+      });
+    }
+
+    res.json({
+      anniversaryDate: data.anniversaryDate || '',
+      events: data.events || []
+    });
+  } catch (err) {
+    console.error('Get Relationship Data Error:', err);
+    res.status(500).json({ error: 'Failed to fetch data', details: err.message });
+  }
+});
+
+// Update Anniversary Date
+app.post('/relationship/anniversary', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { date } = req.body;
+
+  try {
+    const db = await getDatabase();
+    const collection = db.collection('relationship_data');
+
+    await collection.updateOne(
+      { _id: 'main' },
+      { $set: { anniversaryDate: date, updatedAt: new Date() } },
+      { upsert: true }
+    );
+
+    res.json({ success: true, date });
+  } catch (err) {
+    console.error('Update Anniversary Error:', err);
+    res.status(500).json({ error: 'Failed to update anniversary' });
+  }
+});
+
+// Add/Update Custom Event
+app.post('/relationship/events', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { event } = req.body; // Expecting { id, name, date, type }
+  if (!event || !event.name || !event.date) {
+    return res.status(400).json({ error: 'Invalid event data' });
+  }
+
+  // Generate ID if missing
+  if (!event.id) event.id = Date.now().toString();
+
+  try {
+    const db = await getDatabase();
+    const collection = db.collection('relationship_data');
+
+    // We store events in an array. To update specific one, we'd need to pull/push or set specific index.
+    // For simplicity in this "single doc" model:
+    // 1. Get current
+    const doc = await collection.findOne({ _id: 'main' });
+    let events = doc ? (doc.events || []) : [];
+
+    // 2. Check if exists (update) or new (add)
+    const index = events.findIndex(e => e.id === event.id);
+    if (index >= 0) {
+      events[index] = event;
+    } else {
+      events.push(event);
+    }
+
+    // 3. Save back
+    await collection.updateOne(
+      { _id: 'main' },
+      { $set: { events: events, updatedAt: new Date() } },
+      { upsert: true }
+    );
+
+    res.json({ success: true, events });
+  } catch (err) {
+    console.error('Update Events Error:', err);
+    res.status(500).json({ error: 'Failed to update events' });
+  }
+});
+
+// Delete Event
+app.delete('/relationship/events/:id', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { id } = req.params;
+
+  try {
+    const db = await getDatabase();
+    const collection = db.collection('relationship_data');
+
+    await collection.updateOne(
+      { _id: 'main' },
+      { $pull: { events: { id: id } } }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete Event Error:', err);
+    res.status(500).json({ error: 'Failed to delete event' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Backend Server running on port ${port}`);
 });
