@@ -85,6 +85,13 @@ export default function Navbar() {
                             </svg>
                             Relationship
                         </Link>
+
+                        <Link href="/notes" className={router.pathname === '/notes' ? 'nav-link-active' : 'nav-link'}>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Notes
+                        </Link>
                     </div>
 
                     <div className="flex items-center gap-3 border-l border-white/10 pl-6">
@@ -177,6 +184,17 @@ export default function Navbar() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                                 </svg>
                                 Relationship
+                            </Link>
+
+                            <Link
+                                href="/notes"
+                                onClick={() => setIsOpen(false)}
+                                className={`flex items-center gap-3 text-lg font-medium ${router.pathname === '/notes' ? 'text-primary' : 'text-gray-300'}`}
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Notes
                             </Link>
 
                             <div className="h-px bg-white/10 my-2" />

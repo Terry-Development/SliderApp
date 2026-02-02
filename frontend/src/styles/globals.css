@@ -19,6 +19,16 @@ body {
   min-height: 100vh;
 }
 
+/* Hide scrollbars but keep functionality */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
 @layer components {
   .btn-gradient {
     @apply bg-gradient-to-r from-primary to-accent-purple text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 hover:opacity-90 hover:shadow-lg hover:shadow-primary/30;

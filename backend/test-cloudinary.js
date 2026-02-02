@@ -10,15 +10,18 @@ cloudinary.config({
 console.log('Testing Cloudinary Connection...');
 console.log('Cloud Name:', process.env.CLOUDINARY_CLOUD_NAME);
 
-cloudinary.api.ping((error, result) => {
+console.log('Testing Cloudinary Admin API (Resources) with Server params...');
+cloudinary.api.resources({
+    type: 'upload',
+    prefix: 'photo-slider-app/',
+    context: true,
+    max_results: 5,
+    direction: 'desc'
+}, (error, result) => {
     if (error) {
-        console.error('❌ Connection Failed:', error.message);
-        if (error.http_code === 401) {
-            console.error('>> Your API Key or Secret is wrong.');
-        } else if (error.http_code === 404) {
-            console.error('>> Your Cloud Name "Root" seems wrong (it usually looks like "dxyjv..." or "demo").');
-        }
+        console.error('❌ Resources Fetch Failed:', error);
+        console.error('This usually means the API Key/Secret does not have "Admin API" permissions, or the credentials are for an Environment Variable that is restricted.');
     } else {
-        console.log('✅ Connection Successful!', result);
+        console.log('✅ Resources Fetch Successful!', result);
     }
 });

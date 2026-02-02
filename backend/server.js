@@ -807,6 +807,100 @@ app.delete('/relationship/events/:id', async (req, res) => {
   }
 });
 
+// --- Notes Routes (MongoDB) ---
+
+// Get All Notes
+app.get('/notes', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const db = await getDatabase();
+    const notes = await db.collection('notes').find({}).toArray();
+    // Sort by most recently updated
+    notes.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+    res.json(notes);
+  } catch (err) {
+    console.error('Get Notes Error:', err);
+    res.status(500).json({ error: 'Failed to fetch notes' });
+  }
+});
+
+// Create Note
+app.post('/notes', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { title, content, folder } = req.body;
+
+  try {
+    const db = await getDatabase();
+    const newNote = {
+      id: Date.now().toString(),
+      title: title || '',
+      content: content || '',
+      folder: folder || 'General',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    await db.collection('notes').insertOne(newNote);
+    res.json(newNote);
+  } catch (err) {
+    console.error('Create Note Error:', err);
+    res.status(500).json({ error: 'Failed to create note' });
+  }
+});
+
+// Update Note
+app.patch('/notes/:id', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { id } = req.params;
+  const { title, content, folder } = req.body;
+
+  try {
+    const db = await getDatabase();
+    const updateFields = { updatedAt: new Date() };
+    if (title !== undefined) updateFields.title = title;
+    if (content !== undefined) updateFields.content = content;
+    if (folder !== undefined) updateFields.folder = folder;
+
+    await db.collection('notes').updateOne(
+      { id },
+      { $set: updateFields }
+    );
+
+    const updatedNote = await db.collection('notes').findOne({ id });
+    res.json(updatedNote);
+  } catch (err) {
+    console.error('Update Note Error:', err);
+    res.status(500).json({ error: 'Failed to update note' });
+  }
+});
+
+// Delete Note
+app.delete('/notes/:id', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { id } = req.params;
+
+  try {
+    const db = await getDatabase();
+    await db.collection('notes').deleteOne({ id });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete Note Error:', err);
+    res.status(500).json({ error: 'Failed to delete note' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Backend Server running on port ${port}`);
 });
