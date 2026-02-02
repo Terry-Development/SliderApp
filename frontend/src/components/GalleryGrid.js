@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import CachedImage from './CachedImage';
 import Swal from 'sweetalert2';
-import { API_URL, getAuthHeaders } from '@/utils/api';
+import { API_URL, getAuthHeaders, getOptimizedImageUrl } from '@/utils/api';
 
 export default function GalleryGrid({ images, onDelete, selectionMode, selectedIds = new Set(), onToggleSelect, onImageClick }) {
     const [deletingId, setDeletingId] = useState(null);
@@ -88,8 +89,9 @@ export default function GalleryGrid({ images, onDelete, selectionMode, selectedI
                     >
                         {/* Image Preview */}
                         <div className={`relative h-48 bg-dark-bg cursor-pointer`}>
-                            <img
-                                src={img.url}
+                            <CachedImage
+                                id={img.id}
+                                src={getOptimizedImageUrl(img.url, 400)}
                                 alt={img.title}
                                 className={`w-full h-full object-cover transition-opacity ${selectionMode ? 'opacity-80' : ''}`}
                             />

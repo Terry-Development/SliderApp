@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { EffectCoverflow, Pagination, Keyboard } from 'swiper/modules';
-import { API_URL, getAuthHeaders } from '@/utils/api';
+import { API_URL, getAuthHeaders, getOptimizedImageUrl } from '@/utils/api';
+import CachedImage from './CachedImage';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -85,10 +86,10 @@ export default function ImageSlider({ images }) {
                                 className="h-full w-auto relative flex flex-col select-none"
                             >
                                 {/* Main Image */}
-                                <img
-                                    src={img.url}
+                                <CachedImage
+                                    id={`slider-${img.id}`} // Unique ID for slider cache vs grid cache (optional, but good if resolutions differ)
+                                    src={getOptimizedImageUrl(img.url, 1280)}
                                     alt={img.title}
-                                    loading="lazy"
                                     className="h-full w-auto max-w-[85vw] object-contain rounded-[2rem] shadow-2xl bg-zinc-900 border border-white/10"
                                 />
 

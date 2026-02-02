@@ -7,7 +7,7 @@ export default function NoteCard({ note, onDelete }) {
         if (!text) return 'No text';
         const lines = text.split('\n').filter(line => line.trim() !== '');
         if (lines.length === 0) return 'No text';
-        return lines.slice(0, 4).join('\n'); // Show first 4 non-empty lines
+        return lines.slice(0, 10).join('\n'); // Show more lines for mobile preview
     };
 
     const formatDate = (dateString) => {
@@ -17,7 +17,7 @@ export default function NoteCard({ note, onDelete }) {
     };
 
     return (
-        <div className="group relative block w-full aspect-square bg-zinc-900 border border-white/10 rounded-3xl p-6 hover:bg-zinc-800 hover:border-white/20 transition-all shadow-lg shadow-black/20">
+        <div className="group relative block w-full aspect-[4/5] md:aspect-square bg-zinc-900 border border-white/10 rounded-3xl p-6 hover:bg-zinc-800 hover:border-white/20 transition-all shadow-lg shadow-black/20">
             {/* Delete Button */}
             <button
                 onClick={(e) => onDelete(note.id, e)}
@@ -37,7 +37,7 @@ export default function NoteCard({ note, onDelete }) {
 
                 {/* Content Preview */}
                 <div className="flex-1 overflow-hidden">
-                    <p className="text-gray-400 text-sm whitespace-pre-line line-clamp-5 leading-relaxed">
+                    <p className="text-gray-400 text-sm whitespace-pre-line line-clamp-[8] md:line-clamp-5 leading-relaxed">
                         {getPreview(note.content)}
                     </p>
                 </div>
