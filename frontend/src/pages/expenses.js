@@ -29,6 +29,7 @@ export default function ExpensesPage(){
   const [error,setError]=useState('');
   const [currency,setCurrency]=useState('MYR');
   const [editingId,setEditingId]=useState(null);
+  const [allTimeOpen,setAllTimeOpen]=useState(false);
   const [form,setForm]=useState({type:'expense',amount:'',category:'Food',date:dateString(),description:''});
 
   useEffect(()=>{
@@ -68,7 +69,14 @@ export default function ExpensesPage(){
   const allTimeSummary=useMemo(()=>{
     const deposits=allEntries.filter(e=>e.type==='deposit').reduce((s,e)=>s+Number(e.amount||0),0);
     const expenses=allEntries.filter(e=>e.type==='expense').reduce((s,e)=>s+Number(e.amount||0),0);
-    return {deposits,expenses,balance:deposits-expenses};
+    const map={};
+    allEntries.filter(e=>e.type==='expense').forEach(e=>map[e.category]=(map[e.category]||0)+Number(e.amount||0));
+    return {
+      deposits,
+      expenses,
+      balance:deposits-expenses,
+      categories:Object.entries(map).sort((a,b)=>b[1]-a[1])
+    };
   },[allEntries]);
 
   const categories=form.type==='expense'?EXPENSE_CATEGORIES:DEPOSIT_CATEGORIES;
@@ -100,6 +108,7 @@ export default function ExpensesPage(){
     }catch{setError('Could not delete transaction');}
   };
   const maxCategory=summary.categories[0]?.[1]||1;
+  const maxAllTimeCategory=allTimeSummary.categories[0]?.[1]||1;
 
   return <AuthWrapper>
     <Head><title>Monthly Expenses | SliderApp</title></Head>
@@ -140,21 +149,77 @@ export default function ExpensesPage(){
           </div>
         </section>
 
-        <section className="mb-6 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-dark-card to-accent-purple/5 p-4 md:p-5">
-          <div className="mb-4">
-            <div className="text-primary-light text-xs font-semibold uppercase tracking-wider">All time</div>
-            <h2 className="font-semibold text-xl mt-1">Overall totals</h2>
-            <p className="text-xs text-slate-500 mt-1">Everything recorded across every month.</p>
-          </div>
-          <div className="grid sm:grid-cols-3 gap-3">
-            {[['Total deposited',allTimeSummary.deposits,'text-emerald-400'],['Total spent',allTimeSummary.expenses,'text-rose-400'],['Overall balance',allTimeSummary.balance,allTimeSummary.balance>=0?'text-white':'text-rose-400']].map(([label,value,cls])=>
-              <div key={label} className="rounded-xl border border-dark-border bg-dark-bg/55 p-4">
-                <div className="text-sm text-slate-400">{label}</div>
-                <div className={`text-2xl md:text-3xl font-bold mt-2 ${cls}`}>{money(value)}</div>
-                <div className="text-[11px] text-slate-600 mt-1">All recorded transactions</div>
+        <section className="mb-6 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-dark-card to-accent-purple/5 overflow-hidden">
+          <button
+            type="button"
+            onClick={()=>setAllTimeOpen(v=>!v)}
+            className="w-full p-4 md:p-5 flex items-center justify-between gap-4 text-left hover:bg-white/[0.02] transition-colors"
+            aria-expanded={allTimeOpen}
+          >
+            <div>
+              <div className="text-primary-light text-xs font-semibold uppercase tracking-wider">All time</div>
+              <h2 className="font-semibold text-xl mt-1">Overall totals</h2>
+              <p className="text-xs text-slate-500 mt-1">Everything recorded across every month.</p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="hidden sm:block text-right">
+                <div className="text-[10px] uppercase tracking-wider text-slate-600">Balance</div>
+                <div className={`font-bold ${allTimeSummary.balance>=0?'text-white':'text-rose-400'}`}>{money(allTimeSummary.balance)}</div>
               </div>
-            )}
-          </div>
+              <svg
+                className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${allTimeOpen?'rotate-180':''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+
+          {allTimeOpen&&(
+            <div className="border-t border-dark-border/70 p-4 md:p-5">
+              <div className="grid sm:grid-cols-3 gap-3">
+                {[['Total deposited',allTimeSummary.deposits,'text-emerald-400'],['Total spent',allTimeSummary.expenses,'text-rose-400'],['Overall balance',allTimeSummary.balance,allTimeSummary.balance>=0?'text-white':'text-rose-400']].map(([label,value,cls])=>
+                  <div key={label} className="rounded-xl border border-dark-border bg-dark-bg/55 p-4">
+                    <div className="text-sm text-slate-400">{label}</div>
+                    <div className={`text-2xl md:text-3xl font-bold mt-2 ${cls}`}>{money(value)}</div>
+                    <div className="text-[11px] text-slate-600 mt-1">All recorded transactions</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 rounded-xl border border-dark-border bg-dark-bg/35 p-4 md:p-5">
+                <div className="mb-4">
+                  <h3 className="font-semibold text-lg">All-time expense breakdown</h3>
+                  <p className="text-xs text-slate-500 mt-1">Where your total spending went across every month.</p>
+                </div>
+
+                {allTimeSummary.categories.length===0
+                  ? <div className="py-8 text-center text-slate-500 text-sm">No expenses recorded yet.</div>
+                  : <div className="space-y-4">
+                      {allTimeSummary.categories.map(([cat,amt])=>
+                        <div key={cat}>
+                          <div className="flex justify-between gap-4 text-sm mb-1.5">
+                            <span>{cat}</span>
+                            <span className="font-medium">{money(amt)}</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-dark-bg overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-primary to-accent-purple"
+                              style={{width:`${Math.max((amt/maxAllTimeCategory)*100,3)}%`}}
+                            />
+                          </div>
+                          <div className="text-[10px] text-slate-600 mt-1">
+                            {allTimeSummary.expenses?((amt/allTimeSummary.expenses)*100).toFixed(1):'0.0'}% of all-time spending
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                }
+              </div>
+            </div>
+          )}
         </section>
 
         <div className="grid lg:grid-cols-[380px_minmax(0,1fr)] gap-6 items-start">
