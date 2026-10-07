@@ -4,6 +4,7 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const fs = require('fs').promises;
 const path = require('path');
+const crypto = require('crypto');
 const { getDatabase } = require('./db/mongodb');
 require('dotenv').config();
 
@@ -804,6 +805,195 @@ app.delete('/relationship/events/:id', async (req, res) => {
   } catch (err) {
     console.error('Delete Event Error:', err);
     res.status(500).json({ error: 'Failed to delete event' });
+  }
+});
+
+// --- Chat Routes (MongoDB) ---
+
+app.get('/chat/messages', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const db = await getDatabase();
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 500) : 200;
+    const messages = await db.collection('chat_messages')
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray();
+
+    messages.reverse();
+    res.json(messages);
+  } catch (err) {
+    console.error('Get Chat Messages Error:', err);
+    res.status(500).json({ error: 'Failed to fetch chat messages' });
+  }
+});
+
+app.post('/chat/messages', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const sender = String(req.body.sender || '').trim().slice(0, 50);
+  const senderId = String(req.body.senderId || '').trim().slice(0, 100);
+  const text = String(req.body.text || '').trim().slice(0, 4000);
+
+  if (!sender || !senderId || !text) {
+    return res.status(400).json({ error: 'sender, senderId and text are required' });
+  }
+
+  try {
+    const db = await getDatabase();
+    const message = {
+      id: crypto.randomUUID(),
+      sender,
+      senderId,
+      text,
+      createdAt: new Date()
+    };
+
+    await db.collection('chat_messages').insertOne(message);
+    res.status(201).json(message);
+  } catch (err) {
+    console.error('Create Chat Message Error:', err);
+    res.status(500).json({ error: 'Failed to send chat message' });
+  }
+});
+
+app.delete('/chat/messages/:id', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const db = await getDatabase();
+    const result = await db.collection('chat_messages').deleteOne({ id: req.params.id });
+    if (!result.deletedCount) return res.status(404).json({ error: 'Message not found' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete Chat Message Error:', err);
+    res.status(500).json({ error: 'Failed to delete chat message' });
+  }
+});
+
+// --- Expenses Routes (MongoDB) ---
+
+app.get('/expenses', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const month = String(req.query.month || '').trim();
+  if (month && !/^\d{4}-\d{2}$/.test(month)) {
+    return res.status(400).json({ error: 'month must use YYYY-MM format' });
+  }
+
+  try {
+    const db = await getDatabase();
+    const query = month ? { month } : {};
+    const entries = await db.collection('expense_entries')
+      .find(query)
+      .sort({ date: -1, createdAt: -1 })
+      .toArray();
+    res.json(entries);
+  } catch (err) {
+    console.error('Get Expenses Error:', err);
+    res.status(500).json({ error: 'Failed to fetch expense entries' });
+  }
+});
+
+app.post('/expenses', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const type = req.body.type === 'deposit' ? 'deposit' : req.body.type === 'expense' ? 'expense' : '';
+  const amount = Number(req.body.amount);
+  const category = String(req.body.category || '').trim().slice(0, 60);
+  const description = String(req.body.description || '').trim().slice(0, 240);
+  const date = String(req.body.date || '').trim();
+
+  if (!type || !Number.isFinite(amount) || amount <= 0 || !category || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'Valid type, amount, category and date are required' });
+  }
+
+  try {
+    const db = await getDatabase();
+    const entry = {
+      id: crypto.randomUUID(),
+      type,
+      amount: Math.round(amount * 100) / 100,
+      category,
+      description,
+      date,
+      month: date.slice(0, 7),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    await db.collection('expense_entries').insertOne(entry);
+    res.status(201).json(entry);
+  } catch (err) {
+    console.error('Create Expense Error:', err);
+    res.status(500).json({ error: 'Failed to create expense entry' });
+  }
+});
+
+app.patch('/expenses/:id', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const type = req.body.type === 'deposit' ? 'deposit' : req.body.type === 'expense' ? 'expense' : '';
+  const amount = Number(req.body.amount);
+  const category = String(req.body.category || '').trim().slice(0, 60);
+  const description = String(req.body.description || '').trim().slice(0, 240);
+  const date = String(req.body.date || '').trim();
+
+  if (!type || !Number.isFinite(amount) || amount <= 0 || !category || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'Valid type, amount, category and date are required' });
+  }
+
+  try {
+    const db = await getDatabase();
+    await db.collection('expense_entries').updateOne(
+      { id: req.params.id },
+      { $set: {
+        type,
+        amount: Math.round(amount * 100) / 100,
+        category,
+        description,
+        date,
+        month: date.slice(0, 7),
+        updatedAt: new Date()
+      } }
+    );
+    const updated = await db.collection('expense_entries').findOne({ id: req.params.id });
+    if (!updated) return res.status(404).json({ error: 'Entry not found' });
+    res.json(updated);
+  } catch (err) {
+    console.error('Update Expense Error:', err);
+    res.status(500).json({ error: 'Failed to update expense entry' });
+  }
+});
+
+app.delete('/expenses/:id', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const db = await getDatabase();
+    const result = await db.collection('expense_entries').deleteOne({ id: req.params.id });
+    if (!result.deletedCount) return res.status(404).json({ error: 'Entry not found' });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete Expense Error:', err);
+    res.status(500).json({ error: 'Failed to delete expense entry' });
   }
 });
 
