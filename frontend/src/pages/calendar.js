@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import AuthWrapper from '@/components/AuthWrapper';
 import Navbar from '@/components/Navbar';
 import PersonPicker from '@/components/PersonPicker';
-import { FEATURE_API_URL } from '@/utils/api';
+import { API_URL } from '@/utils/api';
 import { PEOPLE, getStoredIdentity, personHeaders } from '@/utils/identity';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -82,7 +82,7 @@ export default function CalendarPage() {
         setLoading(true);
         try {
             const res = await fetch(
-                `${FEATURE_API_URL}/schedule?start=${monthStart}&end=${monthEnd}`,
+                `${API_URL}/schedule?start=${monthStart}&end=${monthEnd}`,
                 {
                     headers: personHeaders(identity),
                     cache: 'no-store'
@@ -159,8 +159,8 @@ export default function CalendarPage() {
         try {
             const res = await fetch(
                 editingId
-                    ? `${FEATURE_API_URL}/schedule/${editingId}`
-                    : `${FEATURE_API_URL}/schedule`,
+                    ? `${API_URL}/schedule/${editingId}`
+                    : `${API_URL}/schedule`,
                 {
                     method: editingId ? 'PATCH' : 'POST',
                     headers: personHeaders(identity, true),
@@ -193,7 +193,7 @@ export default function CalendarPage() {
         if (!window.confirm(`Delete "${event.title}"?`)) return;
 
         try {
-            const res = await fetch(`${FEATURE_API_URL}/schedule/${event.id}`, {
+            const res = await fetch(`${API_URL}/schedule/${event.id}`, {
                 method: 'DELETE',
                 headers: personHeaders(identity)
             });
