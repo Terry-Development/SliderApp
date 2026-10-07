@@ -12,7 +12,7 @@ const authHeaders = () => ({
 function getOrCreateSenderId() {
     let id = localStorage.getItem('chat_sender_id');
     if (!id) {
-        id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `1791340856452-${Math.random()}`;
+        id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
         localStorage.setItem('chat_sender_id', id);
     }
     return id;
