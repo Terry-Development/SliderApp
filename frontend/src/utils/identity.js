@@ -1,6 +1,6 @@
 export const PEOPLE = {
     terence: { id: 'terence', name: 'Terence', initial: 'T' },
-    partner: { id: 'partner', name: 'Partner', initial: 'P' }
+    partner: { id: 'partner', name: 'Jessy', initial: 'J' }
 };
 
 const STORAGE_KEY = 'sliderapp_person';
