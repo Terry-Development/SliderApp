@@ -5,7 +5,7 @@ import { useState } from 'react';
 const navItems = [
     { href: '/', label: 'Slider', icon: 'photo' },
     { href: '/gallery', label: 'Gallery', icon: 'grid' },
-    { href: '/calendar', label: 'Calendar', icon: 'calendar' },
+    { href: '/calendar', label: 'Schedule', icon: 'calendar' },
     { href: '/reminders', label: 'Reminders', icon: 'bell' },
     { href: '/relationship', label: 'Relationship', icon: 'heart' },
     { href: '/notes', label: 'Notes', icon: 'note' },
