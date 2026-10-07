@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import AuthWrapper from '@/components/AuthWrapper';
 import PersonPicker from '@/components/PersonPicker';
-import { FEATURE_API_URL } from '@/utils/api';
+import { API_URL } from '@/utils/api';
 import { PEOPLE, getStoredIdentity, personHeaders } from '@/utils/identity';
 
 function formatMessageTime(value) {
@@ -30,7 +30,7 @@ export default function ChatPage() {
 
     const fetchMessages = useCallback(async (silent = false) => {
         try {
-            const res = await fetch(`${FEATURE_API_URL}/chat/messages?limit=300`, {
+            const res = await fetch(`${API_URL}/chat/messages?limit=300`, {
                 headers: personHeaders(identity),
                 cache: 'no-store'
             });
@@ -82,7 +82,7 @@ export default function ChatPage() {
         setSending(true);
         setText('');
         try {
-            const res = await fetch(`${FEATURE_API_URL}/chat/messages`, {
+            const res = await fetch(`${API_URL}/chat/messages`, {
                 method: 'POST',
                 headers: personHeaders(identity, true),
                 body: JSON.stringify({ text: cleanText })
@@ -102,7 +102,7 @@ export default function ChatPage() {
 
     const deleteMessage = async (id) => {
         try {
-            const res = await fetch(`${FEATURE_API_URL}/chat/messages/${id}`, {
+            const res = await fetch(`${API_URL}/chat/messages/${id}`, {
                 method: 'DELETE',
                 headers: personHeaders(identity)
             });
