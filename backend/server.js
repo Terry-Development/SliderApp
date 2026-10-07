@@ -808,6 +808,17 @@ app.delete('/relationship/events/:id', async (req, res) => {
   }
 });
 
+// --- Shared Person Identity Helpers ---
+const APP_PEOPLE = {
+  terence: { id: 'terence', name: 'Terence' },
+  partner: { id: 'partner', name: 'Partner' }
+};
+
+function getAppUserId(req) {
+  const id = String(req.headers['x-user-id'] || '').trim().toLowerCase();
+  return APP_PEOPLE[id] ? id : null;
+}
+
 // --- Chat Routes (MongoDB) ---
 
 app.get('/chat/messages', async (req, res) => {
@@ -838,20 +849,18 @@ app.post('/chat/messages', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const sender = String(req.body.sender || '').trim().slice(0, 50);
-  const senderId = String(req.body.senderId || '').trim().slice(0, 100);
+  const ownerId = getAppUserId(req);
   const text = String(req.body.text || '').trim().slice(0, 4000);
 
-  if (!sender || !senderId || !text) {
-    return res.status(400).json({ error: 'sender, senderId and text are required' });
-  }
+  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Partner first' });
+  if (!text) return res.status(400).json({ error: 'Message text is required' });
 
   try {
     const db = await getDatabase();
     const message = {
       id: crypto.randomUUID(),
-      sender,
-      senderId,
+      ownerId,
+      sender: APP_PEOPLE[ownerId].name,
       text,
       createdAt: new Date()
     };
@@ -869,14 +878,160 @@ app.delete('/chat/messages/:id', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  const ownerId = getAppUserId(req);
+  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Partner first' });
+
   try {
     const db = await getDatabase();
-    const result = await db.collection('chat_messages').deleteOne({ id: req.params.id });
-    if (!result.deletedCount) return res.status(404).json({ error: 'Message not found' });
+    const result = await db.collection('chat_messages').deleteOne({ id: req.params.id, ownerId });
+    if (!result.deletedCount) {
+      return res.status(404).json({ error: 'Message not found or it belongs to the other person' });
+    }
     res.json({ success: true });
   } catch (err) {
     console.error('Delete Chat Message Error:', err);
     res.status(500).json({ error: 'Failed to delete chat message' });
+  }
+});
+
+// --- Shared Schedule Routes (MongoDB) ---
+
+app.get('/schedule', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const start = String(req.query.start || '').trim();
+  const end = String(req.query.end || '').trim();
+  const query = {};
+
+  if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    return res.status(400).json({ error: 'start must use YYYY-MM-DD format' });
+  }
+  if (end && !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    return res.status(400).json({ error: 'end must use YYYY-MM-DD format' });
+  }
+  if (start || end) {
+    query.date = {};
+    if (start) query.date.$gte = start;
+    if (end) query.date.$lte = end;
+  }
+
+  try {
+    const db = await getDatabase();
+    const events = await db.collection('schedule_events')
+      .find(query)
+      .sort({ date: 1, allDay: -1, startTime: 1, createdAt: 1 })
+      .toArray();
+    res.json(events);
+  } catch (err) {
+    console.error('Get Schedule Error:', err);
+    res.status(500).json({ error: 'Failed to fetch schedule' });
+  }
+});
+
+function readSchedulePayload(body) {
+  const title = String(body.title || '').trim().slice(0, 100);
+  const date = String(body.date || '').trim();
+  const allDay = Boolean(body.allDay);
+  const startTime = allDay ? '' : String(body.startTime || '').trim();
+  const endTime = allDay ? '' : String(body.endTime || '').trim();
+  const status = body.status === 'available' ? 'available' : 'busy';
+  const notes = String(body.notes || '').trim().slice(0, 500);
+
+  if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { error: 'Title and a valid date are required' };
+  }
+  if (!allDay) {
+    if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) {
+      return { error: 'Start and end time are required' };
+    }
+    if (endTime <= startTime) {
+      return { error: 'End time must be later than start time' };
+    }
+  }
+
+  return { title, date, allDay, startTime, endTime, status, notes };
+}
+
+app.post('/schedule', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const ownerId = getAppUserId(req);
+  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Partner first' });
+
+  const payload = readSchedulePayload(req.body || {});
+  if (payload.error) return res.status(400).json({ error: payload.error });
+
+  try {
+    const db = await getDatabase();
+    const event = {
+      id: crypto.randomUUID(),
+      ownerId,
+      ownerName: APP_PEOPLE[ownerId].name,
+      ...payload,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    await db.collection('schedule_events').insertOne(event);
+    res.status(201).json(event);
+  } catch (err) {
+    console.error('Create Schedule Event Error:', err);
+    res.status(500).json({ error: 'Failed to create schedule event' });
+  }
+});
+
+app.patch('/schedule/:id', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const ownerId = getAppUserId(req);
+  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Partner first' });
+
+  const payload = readSchedulePayload(req.body || {});
+  if (payload.error) return res.status(400).json({ error: payload.error });
+
+  try {
+    const db = await getDatabase();
+    const result = await db.collection('schedule_events').updateOne(
+      { id: req.params.id, ownerId },
+      { $set: { ...payload, ownerName: APP_PEOPLE[ownerId].name, updatedAt: new Date() } }
+    );
+
+    if (!result.matchedCount) {
+      return res.status(404).json({ error: 'Schedule item not found or it belongs to the other person' });
+    }
+
+    const updated = await db.collection('schedule_events').findOne({ id: req.params.id, ownerId });
+    res.json(updated);
+  } catch (err) {
+    console.error('Update Schedule Event Error:', err);
+    res.status(500).json({ error: 'Failed to update schedule event' });
+  }
+});
+
+app.delete('/schedule/:id', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const ownerId = getAppUserId(req);
+  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Partner first' });
+
+  try {
+    const db = await getDatabase();
+    const result = await db.collection('schedule_events').deleteOne({ id: req.params.id, ownerId });
+    if (!result.deletedCount) {
+      return res.status(404).json({ error: 'Schedule item not found or it belongs to the other person' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete Schedule Event Error:', err);
+    res.status(500).json({ error: 'Failed to delete schedule event' });
   }
 });
 
