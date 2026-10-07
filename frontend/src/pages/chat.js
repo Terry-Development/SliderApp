@@ -128,7 +128,7 @@ export default function ChatPage() {
                             </div>
                             <div className="min-w-0">
                                 <h1 className="font-semibold leading-tight">SliderApp Chat</h1>
-                                <p className="text-xs text-slate-500">Terence + Partner · MongoDB synced</p>
+                                <p className="text-xs text-slate-500">Terence + Jessy · MongoDB synced</p>
                             </div>
                         </div>
                         <div className="shrink-0 flex items-center gap-2">
@@ -165,7 +165,7 @@ export default function ChatPage() {
                                     const message = item.message;
                                     const ownerId = message.ownerId || message.senderId || '';
                                     const mine = ownerId === identity;
-                                    const senderName = message.sender || PEOPLE[ownerId]?.name || 'Earlier message';
+                                    const senderName = PEOPLE[ownerId]?.name || message.sender || 'Earlier message';
                                     return (
                                         <div key={message.id} className={`group flex ${mine ? 'justify-end' : 'justify-start'}`}>
                                             <div className={`max-w-[84%] md:max-w-[70%] flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
