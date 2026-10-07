@@ -1,222 +1,534 @@
-import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AuthWrapper from '@/components/AuthWrapper';
 import Navbar from '@/components/Navbar';
-import CalendarView from '@/components/CalendarView';
-import { API_URL, getAuthHeaders } from '@/utils/api';
+import PersonPicker from '@/components/PersonPicker';
+import { API_URL } from '@/utils/api';
+import { PEOPLE, getStoredIdentity, personHeaders } from '@/utils/identity';
+
+const pad = (n) => String(n).padStart(2, '0');
+const dateKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const monthKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+
+function parseMonth(value) {
+    const [year, month] = value.split('-').map(Number);
+    return new Date(year, month - 1, 1);
+}
+
+function shiftMonth(value, offset) {
+    const d = parseMonth(value);
+    d.setMonth(d.getMonth() + offset);
+    return monthKey(d);
+}
+
+function monthTitle(value) {
+    return new Intl.DateTimeFormat(undefined, {
+        month: 'long',
+        year: 'numeric'
+    }).format(parseMonth(value));
+}
+
+function formatDayHeading(value) {
+    return new Intl.DateTimeFormat(undefined, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric'
+    }).format(new Date(`${value}T00:00:00`));
+}
+
+function dayNumber(value) {
+    return new Date(`${value}T00:00:00`).getDate();
+}
+
+function weekdayShort(value) {
+    return new Intl.DateTimeFormat(undefined, { weekday: 'short' })
+        .format(new Date(`${value}T00:00:00`));
+}
+
+function eventTime(event) {
+    if (event.allDay) return 'All day';
+    return `${event.startTime} – ${event.endTime}`;
+}
+
+const emptyForm = (date = dateKey()) => ({
+    title: '',
+    date,
+    allDay: false,
+    startTime: '09:00',
+    endTime: '10:00',
+    status: 'busy',
+    notes: ''
+});
 
 export default function CalendarPage() {
-    const [images, setImages] = useState([]);
+    const [identity, setIdentity] = useState('');
+    const [month, setMonth] = useState(monthKey());
+    const [events, setEvents] = useState([]);
+    const [filter, setFilter] = useState('all');
+    const [form, setForm] = useState(emptyForm());
+    const [editingId, setEditingId] = useState(null);
+    const [showForm, setShowForm] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [selectedDateImages, setSelectedDateImages] = useState(null); // For modal
-    const [viewingImage, setViewingImage] = useState(null); // For lightbox
-    const [caption, setCaption] = useState(''); // Caption for selected date
-    const [savingCaption, setSavingCaption] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
 
-    useEffect(() => {
-        fetchImages();
-    }, []);
+    useEffect(() => setIdentity(getStoredIdentity()), []);
 
-    const fetchImages = async () => {
+    const monthStart = `${month}-01`;
+    const monthDate = parseMonth(month);
+    const monthEnd = dateKey(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0));
+
+    const loadSchedule = useCallback(async () => {
+        setLoading(true);
         try {
-            // Fetch ALL images for the calendar
-            const res = await fetch(`${API_URL}/images?folder=All`, {
-                headers: getAuthHeaders(),
-                cache: 'no-store'
-            });
-            const data = await res.json();
-
-            if (Array.isArray(data)) {
-                // Backend already returns createdAt with the correct date
-                setImages(data);
-                console.log('Calendar loaded', data.length, 'images');
-            }
+            const res = await fetch(
+                `${API_URL}/schedule?start=${monthStart}&end=${monthEnd}`,
+                {
+                    headers: personHeaders(identity),
+                    cache: 'no-store'
+                }
+            );
+            const data = await res.json().catch(() => []);
+            if (!res.ok) throw new Error(data.error || 'Could not load schedule');
+            setEvents(Array.isArray(data) ? data : []);
+            setError('');
         } catch (err) {
-            console.error('Calendar fetch error:', err);
+            setError(err.message || 'Could not load schedule');
         } finally {
             setLoading(false);
         }
-    };
+    }, [identity, monthStart, monthEnd]);
 
-    const handleDateClick = async (dateImages) => {
-        // Show modal with all images from this date
-        if (dateImages.length > 0) {
-            setSelectedDateImages(dateImages);
+    useEffect(() => {
+        loadSchedule();
+    }, [loadSchedule]);
 
-            // Fetch caption for this date
-            const dateStr = dateImages[0].createdAt.split('T')[0];
-            try {
-                const res = await fetch(`${API_URL}/date-captions/${dateStr}`, {
-                    headers: getAuthHeaders()
-                });
-                const data = await res.json();
-                setCaption(data.caption || '');
-            } catch (err) {
-                console.error('Failed to fetch caption:', err);
-                setCaption('');
+    const filteredEvents = useMemo(() => {
+        if (filter === 'all') return events;
+        return events.filter((event) => event.ownerId === filter);
+    }, [events, filter]);
+
+    const groupedEvents = useMemo(() => {
+        const groups = [];
+        filteredEvents.forEach((event) => {
+            let group = groups.find((item) => item.date === event.date);
+            if (!group) {
+                group = { date: event.date, events: [] };
+                groups.push(group);
             }
-        }
+            group.events.push(event);
+        });
+        return groups;
+    }, [filteredEvents]);
+
+    const openNewForm = () => {
+        const defaultDate = month === monthKey() ? dateKey() : `${month}-01`;
+        setEditingId(null);
+        setForm(emptyForm(defaultDate));
+        setShowForm(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const saveCaption = async (dateStr, newCaption) => {
-        setSavingCaption(true);
+    const editEvent = (event) => {
+        if (event.ownerId !== identity) return;
+        setEditingId(event.id);
+        setForm({
+            title: event.title,
+            date: event.date,
+            allDay: Boolean(event.allDay),
+            startTime: event.startTime || '09:00',
+            endTime: event.endTime || '10:00',
+            status: event.status || 'busy',
+            notes: event.notes || ''
+        });
+        setShowForm(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const closeForm = () => {
+        setEditingId(null);
+        setShowForm(false);
+        setForm(emptyForm(month === monthKey() ? dateKey() : `${month}-01`));
+    };
+
+    const saveEvent = async (e) => {
+        e.preventDefault();
+        if (!identity || saving) return;
+
+        setSaving(true);
         try {
-            await fetch(`${API_URL}/date-captions/${dateStr}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...getAuthHeaders()
-                },
-                body: JSON.stringify({ caption: newCaption })
-            });
+            const res = await fetch(
+                editingId
+                    ? `${API_URL}/schedule/${editingId}`
+                    : `${API_URL}/schedule`,
+                {
+                    method: editingId ? 'PATCH' : 'POST',
+                    headers: personHeaders(identity, true),
+                    body: JSON.stringify(form)
+                }
+            );
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not save schedule item');
+
+            const targetMonth = form.date.slice(0, 7);
+            closeForm();
+
+            if (targetMonth !== month) {
+                setMonth(targetMonth);
+            } else {
+                await loadSchedule();
+            }
+
+            setError('');
         } catch (err) {
-            console.error('Failed to save caption:', err);
+            setError(err.message || 'Could not save schedule item');
         } finally {
-            setSavingCaption(false);
+            setSaving(false);
         }
     };
 
-    const formatDate = (isoString) => {
+    const deleteEvent = async (event) => {
+        if (event.ownerId !== identity) return;
+        if (!window.confirm(`Delete "${event.title}"?`)) return;
+
         try {
-            return new Date(isoString).toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
+            const res = await fetch(`${API_URL}/schedule/${event.id}`, {
+                method: 'DELETE',
+                headers: personHeaders(identity)
             });
-        } catch {
-            return isoString;
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not delete schedule item');
+
+            setEvents((current) => current.filter((item) => item.id !== event.id));
+        } catch (err) {
+            setError(err.message || 'Could not delete schedule item');
         }
     };
+
+    const personCardStyle = (ownerId) =>
+        ownerId === 'terence'
+            ? 'border-indigo-500/35 bg-indigo-500/[0.07]'
+            : 'border-pink-500/35 bg-pink-500/[0.07]';
+
+    const personPillStyle = (ownerId) =>
+        ownerId === 'terence'
+            ? 'bg-indigo-500/15 text-indigo-300'
+            : 'bg-pink-500/15 text-pink-300';
 
     return (
         <AuthWrapper>
-            <Head>
-                <title>Calendar | SliderApp</title>
-            </Head>
+            <Head><title>Schedule | SliderApp</title></Head>
+            <Navbar />
+            <PersonPicker value={identity} onChange={setIdentity} />
 
-            <div className="min-h-screen bg-dark-bg text-white pb-20">
-                <Navbar />
+            <main className="min-h-screen bg-dark-bg pt-24 pb-14 px-3 md:px-4">
+                <div className="max-w-5xl mx-auto">
+                    <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 mb-6">
+                        <div>
+                            <div className="text-primary-light text-sm font-medium mb-2">Shared availability</div>
+                            <h1 className="text-3xl md:text-4xl font-bold">Monthly Schedule</h1>
+                            <p className="text-slate-400 mt-2">
+                                A simple month-by-month view of what Terence and Jessy have planned.
+                            </p>
+                        </div>
 
-                <main className="max-w-7xl mx-auto px-4 pt-24">
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent-purple">
-                            Memories Calendar
-                        </h1>
-                        <p className="text-slate-400 mt-2">Explore your photos by date</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <PersonPicker value={identity} onChange={setIdentity} />
+                            <button
+                                onClick={openNewForm}
+                                className="btn-gradient px-4 py-2.5 whitespace-nowrap"
+                            >
+                                + Add schedule
+                            </button>
+                        </div>
                     </div>
 
-                    {loading ? (
-                        <div className="flex justify-center py-20">
-                            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-                        </div>
-                    ) : (
-                        <div className="bg-dark-card border border-dark-border rounded-2xl p-6 shadow-xl">
-                            <CalendarView
-                                images={images}
-                                onDateClick={handleDateClick}
-                            />
+                    {error && (
+                        <div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 px-4 py-3 text-sm">
+                            {error}
                         </div>
                     )}
-                </main>
-            </div>
 
-            {/* Date Images Modal */}
-            {selectedDateImages && (
-                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 overflow-y-auto">
-                    <div className="min-h-screen p-4 flex items-start justify-center">
-                        <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-6xl my-8">
-                            {/* Header */}
-                            <div className="p-6 border-b border-dark-border">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div>
-                                        <h2 className="text-2xl font-bold">
-                                            {formatDate(selectedDateImages[0].createdAt)}
-                                        </h2>
-                                        <p className="text-slate-400 text-sm mt-1">
-                                            {selectedDateImages.length} {selectedDateImages.length === 1 ? 'photo' : 'photos'}
-                                        </p>
-                                    </div>
+                    <section className="card-dark p-4 md:p-5 mb-5">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div className="flex items-center justify-between md:justify-start gap-2">
+                                <button
+                                    onClick={() => setMonth(shiftMonth(month, -1))}
+                                    className="w-10 h-10 rounded-xl border border-dark-border bg-dark-bg hover:bg-white/5 text-lg"
+                                    aria-label="Previous month"
+                                >
+                                    ←
+                                </button>
+
+                                <div className="min-w-48 text-center">
+                                    <div className="text-xl md:text-2xl font-bold">{monthTitle(month)}</div>
                                     <button
-                                        onClick={() => setSelectedDateImages(null)}
-                                        className="text-slate-400 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
+                                        onClick={() => setMonth(monthKey())}
+                                        className="text-xs text-primary-light hover:text-white mt-1"
                                     >
-                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
+                                        Jump to current month
                                     </button>
                                 </div>
 
-                                {/* Caption Editor */}
-                                <div className="space-y-2">
-                                    <label className="text-sm text-slate-400">Memory Caption</label>
-                                    <textarea
-                                        value={caption}
-                                        onChange={(e) => setCaption(e.target.value)}
-                                        onBlur={() => saveCaption(selectedDateImages[0].createdAt.split('T')[0], caption)}
-                                        placeholder="Write something about this day..."
-                                        className="w-full bg-dark-bg border border-dark-border rounded-lg p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
-                                        rows={3}
-                                    />
-                                    {savingCaption && <p className="text-xs text-primary animate-pulse">Saving...</p>}
-                                </div>
+                                <button
+                                    onClick={() => setMonth(shiftMonth(month, 1))}
+                                    className="w-10 h-10 rounded-xl border border-dark-border bg-dark-bg hover:bg-white/5 text-lg"
+                                    aria-label="Next month"
+                                >
+                                    →
+                                </button>
                             </div>
 
-                            {/* Image Grid */}
-                            <div className="p-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                                {selectedDateImages.map(img => (
-                                    <div
-                                        key={img.id}
-                                        onClick={() => setViewingImage(img)}
-                                        className="aspect-square rounded-xl overflow-hidden bg-black/20 cursor-pointer group relative hover:ring-2 hover:ring-primary transition-all"
+                            <div className="flex items-center gap-1 p-1 bg-dark-bg border border-dark-border rounded-xl overflow-x-auto">
+                                {[
+                                    ['all', 'Both'],
+                                    ['terence', 'Terence'],
+                                    ['partner', 'Jessy']
+                                ].map(([id, label]) => (
+                                    <button
+                                        key={id}
+                                        onClick={() => setFilter(id)}
+                                        className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                                            filter === id
+                                                ? 'bg-primary text-white'
+                                                : 'text-slate-500 hover:text-white'
+                                        }`}
                                     >
-                                        <img
-                                            src={img.url}
-                                            alt={img.title || 'Photo'}
-                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                                        />
-                                        {img.title && (
-                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                                                <p className="text-white text-sm font-medium truncate">{img.title}</p>
-                                            </div>
-                                        )}
-                                    </div>
+                                        {label}
+                                    </button>
                                 ))}
                             </div>
                         </div>
-                    </div>
-                </div>
-            )}
+                    </section>
 
-            {/* Lightbox for Individual Image */}
-            {viewingImage && (
-                <div
-                    className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4"
-                    onClick={() => setViewingImage(null)}
-                >
-                    <button
-                        className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-[70]"
-                        onClick={() => setViewingImage(null)}
-                    >
-                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                    <div className="max-w-7xl max-h-[90vh] relative" onClick={e => e.stopPropagation()}>
-                        <img
-                            src={viewingImage.url}
-                            alt={viewingImage.title}
-                            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
-                        />
-                        {(viewingImage.title || viewingImage.description) && (
-                            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white rounded-b-lg">
-                                {viewingImage.title && <h3 className="text-xl font-bold">{viewingImage.title}</h3>}
-                                {viewingImage.description && <p className="text-sm text-slate-300">{viewingImage.description}</p>}
+                    {showForm && (
+                        <form onSubmit={saveEvent} className="card-dark p-5 md:p-6 mb-5">
+                            <div className="flex items-start justify-between gap-4 mb-5">
+                                <div>
+                                    <h2 className="text-lg font-semibold">
+                                        {editingId ? 'Edit schedule' : 'Add schedule'}
+                                    </h2>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Saving as {PEOPLE[identity]?.name || 'your profile'}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={closeForm}
+                                    className="text-slate-500 hover:text-white p-2"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <label className="md:col-span-2">
+                                    <span className="block text-sm text-slate-400 mb-1.5">Event</span>
+                                    <input
+                                        required
+                                        value={form.title}
+                                        onChange={(e) => setForm({ ...form, title: e.target.value.slice(0, 100) })}
+                                        placeholder="Class, work, appointment, dinner..."
+                                        className="input-dark"
+                                    />
+                                </label>
+
+                                <label>
+                                    <span className="block text-sm text-slate-400 mb-1.5">Date</span>
+                                    <input
+                                        type="date"
+                                        required
+                                        value={form.date}
+                                        onChange={(e) => setForm({ ...form, date: e.target.value })}
+                                        className="input-dark !px-3 [color-scheme:dark]"
+                                    />
+                                </label>
+
+                                <label>
+                                    <span className="block text-sm text-slate-400 mb-1.5">Availability</span>
+                                    <select
+                                        value={form.status}
+                                        onChange={(e) => setForm({ ...form, status: e.target.value })}
+                                        className="input-dark !px-3 [color-scheme:dark]"
+                                    >
+                                        <option value="busy">Busy / Not free</option>
+                                        <option value="available">Available</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <label className="flex items-center gap-2 my-4 text-sm text-slate-300 cursor-pointer w-fit">
+                                <input
+                                    type="checkbox"
+                                    checked={form.allDay}
+                                    onChange={(e) => setForm({ ...form, allDay: e.target.checked })}
+                                    className="accent-indigo-500"
+                                />
+                                All day
+                            </label>
+
+                            {!form.allDay && (
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <label>
+                                        <span className="block text-sm text-slate-400 mb-1.5">From</span>
+                                        <input
+                                            type="time"
+                                            required
+                                            value={form.startTime}
+                                            onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                                            className="input-dark !px-3 [color-scheme:dark]"
+                                        />
+                                    </label>
+                                    <label>
+                                        <span className="block text-sm text-slate-400 mb-1.5">Until</span>
+                                        <input
+                                            type="time"
+                                            required
+                                            value={form.endTime}
+                                            onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                                            className="input-dark !px-3 [color-scheme:dark]"
+                                        />
+                                    </label>
+                                </div>
+                            )}
+
+                            <label className="block mb-5">
+                                <span className="block text-sm text-slate-400 mb-1.5">Notes</span>
+                                <textarea
+                                    rows={3}
+                                    value={form.notes}
+                                    onChange={(e) => setForm({ ...form, notes: e.target.value.slice(0, 500) })}
+                                    placeholder="Optional details..."
+                                    className="input-dark resize-none"
+                                />
+                            </label>
+
+                            <div className="flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={closeForm}
+                                    className="px-4 py-2.5 rounded-xl border border-dark-border text-slate-400 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    disabled={!identity || saving}
+                                    className="btn-gradient px-5 py-2.5 disabled:opacity-40"
+                                >
+                                    {saving ? 'Saving...' : editingId ? 'Save changes' : 'Add event'}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+
+                    <section>
+                        {loading ? (
+                            <div className="card-dark py-20 text-center text-slate-500">
+                                Loading schedule...
+                            </div>
+                        ) : groupedEvents.length === 0 ? (
+                            <div className="card-dark py-16 px-6 text-center">
+                                <div className="w-14 h-14 rounded-2xl bg-dark-bg border border-dark-border grid place-items-center mx-auto mb-4 text-slate-500">
+                                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                </div>
+                                <h2 className="font-semibold text-lg">Nothing scheduled in {monthTitle(month)}</h2>
+                                <p className="text-slate-500 text-sm mt-2">
+                                    Add an event when either of you is busy or free.
+                                </p>
+                                <button onClick={openNewForm} className="btn-gradient px-4 py-2.5 mt-5">
+                                    + Add first event
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-7">
+                                {groupedEvents.map((group) => (
+                                    <div key={group.date}>
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="w-14 h-14 rounded-2xl bg-dark-card border border-dark-border flex flex-col items-center justify-center shrink-0">
+                                                <span className="text-[10px] uppercase tracking-wider text-slate-500">
+                                                    {weekdayShort(group.date)}
+                                                </span>
+                                                <span className="text-xl font-bold leading-none mt-1">
+                                                    {dayNumber(group.date)}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <h2 className="font-semibold text-lg">{formatDayHeading(group.date)}</h2>
+                                                <p className="text-xs text-slate-500">
+                                                    {group.events.length} {group.events.length === 1 ? 'event' : 'events'}
+                                                </p>
+                                            </div>
+                                            <div className="h-px bg-dark-border flex-1 ml-2" />
+                                        </div>
+
+                                        <div className="space-y-3 md:pl-[68px]">
+                                            {group.events.map((event) => {
+                                                const mine = event.ownerId === identity;
+                                                const ownerName = PEOPLE[event.ownerId]?.name || event.ownerName || 'Unknown';
+
+                                                return (
+                                                    <article
+                                                        key={event.id}
+                                                        className={`rounded-2xl border p-4 md:p-5 ${personCardStyle(event.ownerId)}`}
+                                                    >
+                                                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                                                                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${personPillStyle(event.ownerId)}`}>
+                                                                        {ownerName}
+                                                                    </span>
+                                                                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                                                                        event.status === 'available'
+                                                                            ? 'bg-emerald-500/15 text-emerald-300'
+                                                                            : 'bg-rose-500/15 text-rose-300'
+                                                                    }`}>
+                                                                        {event.status === 'available' ? 'Available' : 'Busy'}
+                                                                    </span>
+                                                                    <span className="text-xs text-slate-500">{eventTime(event)}</span>
+                                                                </div>
+
+                                                                <h3 className="text-lg md:text-xl font-semibold break-words">
+                                                                    {event.title}
+                                                                </h3>
+
+                                                                {event.notes && (
+                                                                    <p className="text-sm text-slate-400 mt-2 whitespace-pre-wrap">
+                                                                        {event.notes}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+
+                                                            {mine && (
+                                                                <div className="flex gap-2 shrink-0">
+                                                                    <button
+                                                                        onClick={() => editEvent(event)}
+                                                                        className="px-3 py-2 rounded-lg border border-dark-border bg-dark-bg/40 text-xs text-slate-300 hover:text-white"
+                                                                    >
+                                                                        Edit
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => deleteEvent(event)}
+                                                                        className="px-3 py-2 rounded-lg border border-red-500/20 bg-red-500/5 text-xs text-red-300 hover:bg-red-500/10"
+                                                                    >
+                                                                        Delete
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </article>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
-                    </div>
+                    </section>
                 </div>
-            )}
+            </main>
         </AuthWrapper>
     );
 }
