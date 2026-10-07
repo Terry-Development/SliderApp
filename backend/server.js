@@ -811,7 +811,7 @@ app.delete('/relationship/events/:id', async (req, res) => {
 // --- Shared Person Identity Helpers ---
 const APP_PEOPLE = {
   terence: { id: 'terence', name: 'Terence' },
-  partner: { id: 'partner', name: 'Partner' }
+  partner: { id: 'partner', name: 'Jessy' }
 };
 
 function getAppUserId(req) {
@@ -852,7 +852,7 @@ app.post('/chat/messages', async (req, res) => {
   const ownerId = getAppUserId(req);
   const text = String(req.body.text || '').trim().slice(0, 4000);
 
-  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Partner first' });
+  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Jessy first' });
   if (!text) return res.status(400).json({ error: 'Message text is required' });
 
   try {
@@ -879,7 +879,7 @@ app.delete('/chat/messages/:id', async (req, res) => {
   }
 
   const ownerId = getAppUserId(req);
-  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Partner first' });
+  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Jessy first' });
 
   try {
     const db = await getDatabase();
@@ -960,7 +960,7 @@ app.post('/schedule', async (req, res) => {
   }
 
   const ownerId = getAppUserId(req);
-  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Partner first' });
+  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Jessy first' });
 
   const payload = readSchedulePayload(req.body || {});
   if (payload.error) return res.status(400).json({ error: payload.error });
@@ -990,7 +990,7 @@ app.patch('/schedule/:id', async (req, res) => {
   }
 
   const ownerId = getAppUserId(req);
-  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Partner first' });
+  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Jessy first' });
 
   const payload = readSchedulePayload(req.body || {});
   if (payload.error) return res.status(400).json({ error: payload.error });
@@ -1020,7 +1020,7 @@ app.delete('/schedule/:id', async (req, res) => {
   }
 
   const ownerId = getAppUserId(req);
-  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Partner first' });
+  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Jessy first' });
 
   try {
     const db = await getDatabase();
