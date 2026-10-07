@@ -2,7 +2,7 @@ import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import AuthWrapper from '@/components/AuthWrapper';
-import { FEATURE_API_URL } from '@/utils/api';
+import { API_URL } from '@/utils/api';
 
 const EXPENSE_CATEGORIES = ['Food','Transport','Shopping','Bills','Entertainment','Health','Education','Travel','Subscriptions','Other'];
 const DEPOSIT_CATEGORIES = ['Salary','Allowance','Refund','Transfer','Gift','Other'];
@@ -42,8 +42,8 @@ export default function ExpensesPage(){
     try{
       const auth={'x-admin-password':localStorage.getItem('admin_password')||''};
       const [monthResponse,allResponse]=await Promise.all([
-        fetch(`${FEATURE_API_URL}/expenses?month=${encodeURIComponent(selectedMonth)}`,{headers:auth,cache:'no-store'}),
-        fetch(`${FEATURE_API_URL}/expenses`,{headers:auth,cache:'no-store'})
+        fetch(`${API_URL}/expenses?month=${encodeURIComponent(selectedMonth)}`,{headers:auth,cache:'no-store'}),
+        fetch(`${API_URL}/expenses`,{headers:auth,cache:'no-store'})
       ]);
       if(!monthResponse.ok||!allResponse.ok) throw new Error('Could not load expenses');
       const [monthData,allData]=await Promise.all([monthResponse.json(),allResponse.json()]);
@@ -87,7 +87,7 @@ export default function ExpensesPage(){
     if(!form.amount||Number(form.amount)<=0)return;
     setSaving(true);
     try{
-      const r=await fetch(editingId?`${FEATURE_API_URL}/expenses/${editingId}`:`${FEATURE_API_URL}/expenses`,{
+      const r=await fetch(editingId?`${API_URL}/expenses/${editingId}`:`${API_URL}/expenses`,{
         method:editingId?'PATCH':'POST',headers:headers(),body:JSON.stringify({...form,amount:Number(form.amount)})
       });
       const data=await r.json().catch(()=>({}));
@@ -102,7 +102,7 @@ export default function ExpensesPage(){
   const remove=async e=>{
     if(!window.confirm(`Delete ${e.description||e.category} (${money(e.amount)})?`)) return;
     try{
-      const r=await fetch(`${FEATURE_API_URL}/expenses/${e.id}`,{method:'DELETE',headers:{'x-admin-password':localStorage.getItem('admin_password')||''}});
+      const r=await fetch(`${API_URL}/expenses/${e.id}`,{method:'DELETE',headers:{'x-admin-password':localStorage.getItem('admin_password')||''}});
       if(!r.ok) throw new Error();
       await load();
     }catch{setError('Could not delete transaction');}
