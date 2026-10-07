@@ -23,6 +23,7 @@ const headers = () => ({'Content-Type':'application/json','x-admin-password':loc
 export default function ExpensesPage(){
   const [selectedMonth,setSelectedMonth]=useState(monthString());
   const [entries,setEntries]=useState([]);
+  const [allEntries,setAllEntries]=useState([]);
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState('');
@@ -38,10 +39,15 @@ export default function ExpensesPage(){
   const load=useCallback(async()=>{
     setLoading(true);
     try{
-      const r=await fetch(`${FEATURE_API_URL}/expenses?month=${encodeURIComponent(selectedMonth)}`,{headers:{'x-admin-password':localStorage.getItem('admin_password')||''},cache:'no-store'});
-      if(!r.ok) throw new Error('Could not load this month');
-      const data=await r.json();
-      setEntries(Array.isArray(data)?data:[]);
+      const auth={'x-admin-password':localStorage.getItem('admin_password')||''};
+      const [monthResponse,allResponse]=await Promise.all([
+        fetch(`${FEATURE_API_URL}/expenses?month=${encodeURIComponent(selectedMonth)}`,{headers:auth,cache:'no-store'}),
+        fetch(`${FEATURE_API_URL}/expenses`,{headers:auth,cache:'no-store'})
+      ]);
+      if(!monthResponse.ok||!allResponse.ok) throw new Error('Could not load expenses');
+      const [monthData,allData]=await Promise.all([monthResponse.json(),allResponse.json()]);
+      setEntries(Array.isArray(monthData)?monthData:[]);
+      setAllEntries(Array.isArray(allData)?allData:[]);
       setError('');
     }catch(e){ setError(e.message||'Could not load expenses'); }
     finally{ setLoading(false); }
@@ -58,6 +64,12 @@ export default function ExpensesPage(){
     entries.filter(e=>e.type==='expense').forEach(e=>map[e.category]=(map[e.category]||0)+Number(e.amount||0));
     return {deposits,expenses,balance:deposits-expenses,categories:Object.entries(map).sort((a,b)=>b[1]-a[1])};
   },[entries]);
+
+  const allTimeSummary=useMemo(()=>{
+    const deposits=allEntries.filter(e=>e.type==='deposit').reduce((s,e)=>s+Number(e.amount||0),0);
+    const expenses=allEntries.filter(e=>e.type==='expense').reduce((s,e)=>s+Number(e.amount||0),0);
+    return {deposits,expenses,balance:deposits-expenses};
+  },[allEntries]);
 
   const categories=form.type==='expense'?EXPENSE_CATEGORIES:DEPOSIT_CATEGORIES;
   const reset=()=>{setEditingId(null);setForm({type:'expense',amount:'',category:'Food',date:selectedMonth===monthString()?dateString():`${selectedMonth}-01`,description:''});};
@@ -84,7 +96,7 @@ export default function ExpensesPage(){
     try{
       const r=await fetch(`${FEATURE_API_URL}/expenses/${e.id}`,{method:'DELETE',headers:{'x-admin-password':localStorage.getItem('admin_password')||''}});
       if(!r.ok) throw new Error();
-      setEntries(x=>x.filter(v=>v.id!==e.id));
+      await load();
     }catch{setError('Could not delete transaction');}
   };
   const maxCategory=summary.categories[0]?.[1]||1;
@@ -114,10 +126,35 @@ export default function ExpensesPage(){
 
         {error&&<div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 px-4 py-3 text-sm">{error}</div>}
 
-        <section className="grid sm:grid-cols-3 gap-4 mb-6">
-          {[['Deposits',summary.deposits,'text-emerald-400'],['Expenses',summary.expenses,'text-rose-400'],['Net balance',summary.balance,summary.balance>=0?'text-white':'text-rose-400']].map(([label,value,cls])=>
-            <div key={label} className="card-dark p-5"><div className="text-sm text-slate-400 mb-3">{label}</div><div className={`text-2xl font-bold ${cls}`}>{money(value)}</div><div className="text-xs text-slate-500 mt-1">{monthLabel(selectedMonth)}</div></div>
-          )}
+        <section className="mb-6">
+          <div className="flex items-end justify-between gap-4 mb-3">
+            <div>
+              <h2 className="font-semibold text-lg">This month</h2>
+              <p className="text-xs text-slate-500 mt-1">{monthLabel(selectedMonth)}</p>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4">
+            {[['Deposited',summary.deposits,'text-emerald-400'],['Spent',summary.expenses,'text-rose-400'],['Monthly balance',summary.balance,summary.balance>=0?'text-white':'text-rose-400']].map(([label,value,cls])=>
+              <div key={label} className="card-dark p-5"><div className="text-sm text-slate-400 mb-3">{label}</div><div className={`text-2xl font-bold ${cls}`}>{money(value)}</div><div className="text-xs text-slate-500 mt-1">{monthLabel(selectedMonth)}</div></div>
+            )}
+          </div>
+        </section>
+
+        <section className="mb-6 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-dark-card to-accent-purple/5 p-4 md:p-5">
+          <div className="mb-4">
+            <div className="text-primary-light text-xs font-semibold uppercase tracking-wider">All time</div>
+            <h2 className="font-semibold text-xl mt-1">Overall totals</h2>
+            <p className="text-xs text-slate-500 mt-1">Everything recorded across every month.</p>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            {[['Total deposited',allTimeSummary.deposits,'text-emerald-400'],['Total spent',allTimeSummary.expenses,'text-rose-400'],['Overall balance',allTimeSummary.balance,allTimeSummary.balance>=0?'text-white':'text-rose-400']].map(([label,value,cls])=>
+              <div key={label} className="rounded-xl border border-dark-border bg-dark-bg/55 p-4">
+                <div className="text-sm text-slate-400">{label}</div>
+                <div className={`text-2xl md:text-3xl font-bold mt-2 ${cls}`}>{money(value)}</div>
+                <div className="text-[11px] text-slate-600 mt-1">All recorded transactions</div>
+              </div>
+            )}
+          </div>
         </section>
 
         <div className="grid lg:grid-cols-[380px_minmax(0,1fr)] gap-6 items-start">
