@@ -1,4 +1,4 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Feature-branch preview backend. Before merging to main, restore the environment-based URL.\nexport const API_URL = 'https://sliderapp-pr-1.onrender.com';
 
 export const getAuthHeaders = () => {
     const password = typeof window !== 'undefined' ? localStorage.getItem('admin_password') : '';
