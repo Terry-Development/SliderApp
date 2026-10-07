@@ -1,7 +1,5 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export const FEATURE_API_URL = 'https://sliderapp-pr-1.onrender.com';
-
 export const getAuthHeaders = () => {
     const password = typeof window !== 'undefined' ? localStorage.getItem('admin_password') : '';
     return {
