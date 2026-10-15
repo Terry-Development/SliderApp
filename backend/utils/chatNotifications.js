@@ -30,6 +30,11 @@ function buildDiscreetSmsBody(brand = process.env.SMS_ALERT_BRAND || 'SliderApp'
 }
 
 function smsConfig() {
+  // Render PR previews inherit production env vars. SMS must be explicitly
+  // enabled for the preview to avoid accidental texts or charges.
+  if (process.env.IS_PULL_REQUEST === 'true' && process.env.ALLOW_PREVIEW_SMS !== 'true') {
+    return null;
+  }
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   const to = process.env.TERENCE_SMS_TO;
