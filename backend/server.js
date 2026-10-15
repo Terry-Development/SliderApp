@@ -5,6 +5,7 @@ const cloudinary = require('cloudinary').v2;
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
+const { dispatchChatAlert } = require('./utils/chatNotifications');
 const { getDatabase } = require('./db/mongodb');
 require('dotenv').config();
 
@@ -14,6 +15,18 @@ const port = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// PR previews can inherit production Cloudinary credentials. Preserve read
+// access for previews, but block destructive image/album operations.
+app.use((req, res, next) => {
+  if (process.env.IS_PULL_REQUEST === 'true' &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
+      (/^\/images(?:\/|$)/.test(req.path) || /^\/albums(?:\/|$)/.test(req.path))) {
+    return res.status(403).json({ error: 'Media changes are disabled in the preview' });
+  }
+  next();
+});
+
 
 // Cloudinary Configuration
 cloudinary.config({
@@ -819,6 +832,85 @@ function getAppUserId(req) {
   return APP_PEOPLE[id] ? id : null;
 }
 
+// Register Jessy's web-push subscription for chat notifications. Existing
+// reminder subscriptions remain valid; they do not receive chat alerts unless
+// explicitly linked to Jessy's identity here.
+app.post('/chat/subscribe', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (getAppUserId(req) !== 'partner') {
+    return res.status(403).json({ error: 'Select Jessy to enable chat alerts on this device' });
+  }
+
+  const { endpoint, keys } = req.body || {};
+  if (typeof endpoint !== 'string' || !endpoint.startsWith('https://') ||
+      !keys || typeof keys.p256dh !== 'string' || typeof keys.auth !== 'string') {
+    return res.status(400).json({ error: 'A valid web-push subscription is required' });
+  }
+
+  try {
+    const db = await getDatabase();
+    await db.collection('subscriptions').updateOne(
+      { endpoint },
+      { $set: { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth },
+                ownerId: 'partner', updatedAt: new Date() } },
+      { upsert: true }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Chat subscription error:', error);
+    res.status(500).json({ error: 'Could not enable chat alerts' });
+  }
+});
+
+// The status endpoint checks whether this device was registered for Jessy's
+// chat notifications. Do not expose subscription keys or other device records.
+app.post('/chat/notification-status', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (getAppUserId(req) !== 'partner') {
+    return res.status(403).json({ error: 'Select Jessy first' });
+  }
+  const endpoint = req.body && req.body.endpoint;
+  if (typeof endpoint !== 'string' || !endpoint.startsWith('https://')) {
+    return res.status(400).json({ error: 'Invalid push endpoint' });
+  }
+  try {
+    const db = await getDatabase();
+    const existing = await db.collection('subscriptions').findOne({
+      endpoint, ownerId: 'partner'
+    });
+    res.json({ enabled: Boolean(existing) });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not check notification status' });
+  }
+});
+
+// Disable chat push for this device without affecting reminder notifications.
+app.post('/chat/unsubscribe', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (getAppUserId(req) !== 'partner') {
+    return res.status(403).json({ error: 'Select Jessy first' });
+  }
+  const endpoint = req.body && req.body.endpoint;
+  if (typeof endpoint !== 'string' || !endpoint.startsWith('https://')) {
+    return res.status(400).json({ error: 'Invalid push endpoint' });
+  }
+  try {
+    const db = await getDatabase();
+    await db.collection('subscriptions').updateOne(
+      { endpoint, ownerId: 'partner' }, { $unset: { ownerId: '' } }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not disable chat alerts' });
+  }
+});
+
 // --- Chat Routes (MongoDB) ---
 
 app.get('/chat/messages', async (req, res) => {
@@ -866,6 +958,12 @@ app.post('/chat/messages', async (req, res) => {
     };
 
     await db.collection('chat_messages').insertOne(message);
+    // Notifications are best-effort: a provider outage must never lose a chat.
+    try {
+      await dispatchChatAlert(db, message);
+    } catch (notificationError) {
+      console.error('Chat alert delivery failed:', notificationError.message);
+    }
     res.status(201).json(message);
   } catch (err) {
     console.error('Create Chat Message Error:', err);

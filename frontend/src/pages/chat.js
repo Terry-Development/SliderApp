@@ -5,6 +5,9 @@ import AuthWrapper from '@/components/AuthWrapper';
 import PersonPicker from '@/components/PersonPicker';
 import { API_URL } from '@/utils/api';
 import { PEOPLE, getStoredIdentity, personHeaders } from '@/utils/identity';
+import { urlBase64ToUint8Array } from '@/utils/urlBase64ToUint8Array';
+
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
 function formatMessageTime(value) {
     const date = new Date(value);
@@ -25,6 +28,9 @@ export default function ChatPage() {
     const bottomRef = useRef(null);
     const textareaRef = useRef(null);
     const initialLoadRef = useRef(true);
+    const [pushBusy, setPushBusy] = useState(false);
+    const [pushEnabled, setPushEnabled] = useState(false);
+    const [pushMessage, setPushMessage] = useState('');
 
     useEffect(() => setIdentity(getStoredIdentity()), []);
 
@@ -61,6 +67,90 @@ export default function ChatPage() {
     useEffect(() => {
         if (!initialLoadRef.current && messages.length) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages.length]);
+
+    useEffect(() => {
+        let cancelled = false;
+        if (identity !== 'partner') {
+            setPushEnabled(false);
+            setPushMessage('');
+            return;
+        }
+
+        (async () => {
+            try {
+                if (!('serviceWorker' in navigator)) return;
+                const registration = await navigator.serviceWorker.getRegistration();
+                const subscription = registration ? await registration.pushManager?.getSubscription() : null;
+                if (!subscription) return;
+                const response = await fetch(`${API_URL}/chat/notification-status`, {
+                    method: 'POST',
+                    headers: personHeaders('partner', true),
+                    body: JSON.stringify({ endpoint: subscription.endpoint })
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (!cancelled) setPushEnabled(Boolean(data.enabled));
+            } catch (err) {
+                console.warn('Unable to check chat alert status:', err);
+            }
+        })();
+
+        return () => { cancelled = true; };
+    }, [identity]);
+
+    const toggleJessyNotifications = async () => {
+        if (identity !== 'partner' || pushBusy) return;
+        setPushBusy(true);
+        setPushMessage('');
+        try {
+            if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+                throw new Error('This browser does not support web push notifications.');
+            }
+            if (!VAPID_PUBLIC_KEY) throw new Error('Push notifications are not configured on the frontend.');
+
+            let registration = await navigator.serviceWorker.getRegistration();
+            if (!registration && !pushEnabled) {
+                // Normally next-pwa registers /sw.js. Fallback to the existing
+                // dedicated worker, as the Reminders page already does.
+                registration = await navigator.serviceWorker.register('/push-sw.js', { scope: '/' });
+            }
+            if (!registration) throw new Error('No service worker is registered.');
+
+            if (!pushEnabled && Notification.permission !== 'granted') {
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') throw new Error('Please allow notifications for this site.');
+            }
+
+            const readyRegistration = await navigator.serviceWorker.ready;
+            const pushManager = readyRegistration.pushManager;
+            let subscription = await pushManager.getSubscription();
+            if (!subscription && !pushEnabled) {
+                subscription = await pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                });
+            }
+            if (!subscription) throw new Error('No push subscription found on this device.');
+
+            const response = await fetch(`${API_URL}/chat/${pushEnabled ? 'unsubscribe' : 'subscribe'}`, {
+                method: 'POST',
+                headers: personHeaders('partner', true),
+                body: JSON.stringify(pushEnabled
+                    ? { endpoint: subscription.endpoint }
+                    : subscription.toJSON())
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || 'Failed to update chat notifications.');
+            setPushEnabled((current) => !current);
+            setPushMessage(pushEnabled
+                ? 'Chat alerts disabled on this device. Reminder alerts remain enabled.'
+                : 'Chat alerts enabled on this device.');
+        } catch (err) {
+            setPushMessage(err.message || 'Could not change notification settings.');
+        } finally {
+            setPushBusy(false);
+        }
+    };
 
     const grouped = useMemo(() => {
         const result = [];
@@ -132,12 +222,26 @@ export default function ChatPage() {
                             </div>
                         </div>
                         <div className="shrink-0 flex items-center gap-2">
+                            {identity === 'partner' && (
+                                <button
+                                    type="button"
+                                    disabled={pushBusy}
+                                    onClick={toggleJessyNotifications}
+                                    className="text-[11px] md:text-xs border border-dark-border rounded-lg px-2.5 py-2 text-slate-200 hover:bg-white/10 disabled:opacity-50"
+                                    title="Configure push notifications for Jessy on this device"
+                                >
+                                    {pushBusy ? 'Saving…' : pushEnabled ? 'Mute alerts' : 'Enable alerts'}
+                                </button>
+                            )}
                             {identity && <span className="hidden sm:inline text-xs text-slate-500">You are {PEOPLE[identity]?.name}</span>}
                             <PersonPicker value={identity} onChange={setIdentity} compact />
                         </div>
                     </header>
 
                     {error && <div className="mx-4 mt-3 rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 px-4 py-2 text-sm">{error}</div>}
+                    {identity === 'partner' && pushMessage && (
+                        <div role="status" className="mx-4 mt-3 rounded-lg border border-primary/30 bg-primary/10 text-slate-200 px-4 py-2 text-xs">{pushMessage}</div>
+                    )}
 
                     <section className="flex-1 overflow-y-auto px-3 md:px-6 py-5 bg-gradient-to-b from-dark-bg/70 to-dark-bg">
                         {loading ? (

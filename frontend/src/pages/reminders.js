@@ -1,10 +1,11 @@
+import { API_URL } from '@/utils/api';
 import { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import Head from 'next/head';
 import Navbar from '../components/Navbar';
 import { urlBase64ToUint8Array } from '../utils/urlBase64ToUint8Array';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Use the shared API router so PR previews never write to production.
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
 export default function Reminders() {

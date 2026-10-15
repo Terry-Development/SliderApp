@@ -1,3 +1,4 @@
+import { API_URL } from '@/utils/api';
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Navbar from '../components/Navbar';
@@ -7,7 +8,7 @@ import { getDaysTogether, getNextEventDate, getDaysRemaining, formatDate } from 
 import Swal from 'sweetalert2';
 
 // API Configuration
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Use the shared API router so PR previews never write to production.
 // In a real app we'd get this from a secure auth context, but reusing the pattern seen in server.js headers
 // In a real app we'd get this from a secure auth context, but reusing the pattern seen in server.js headers
 const getAdminPassword = () => {
