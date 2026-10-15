@@ -18,7 +18,7 @@ test('chat notifications route to the other person only', () => {
 test('all SMS variants contain no sender names or chat content', () => {
   for (let index = 0; index < 3; index++) {
     const body = buildDiscreetSmsBody('ExampleBrand', index);
-    assert.match(body, /^RM0\.00 ExampleBrand: /);
+    assert.match(body, /^RM 0\.00 ExampleBrand: /);
     assert.doesNotMatch(body, /Terence|Jessy|SliderApp|Chat|message from/i);
   }
 });
@@ -31,7 +31,7 @@ test('SMS brand must be a nonempty legitimate configured name', () => {
 test('SMS stays disabled without a provider configuration', () => {
   const names = [
     'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TERENCE_SMS_TO',
-    'TWILIO_FROM', 'TWILIO_MESSAGING_SERVICE_SID'
+    'TWILIO_FROM', 'TWILIO_MESSAGING_SERVICE_SID', 'SMS_ALERT_BRAND'
   ];
   const original = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   try {
