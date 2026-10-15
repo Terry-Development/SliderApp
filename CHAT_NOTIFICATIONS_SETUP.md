@@ -34,7 +34,7 @@ SMS_ALERT_BRAND=YourLegitimateRegisteredBrand
 
 The SMS helper calls Twilio's HTTPS Messages endpoint using Node's built-in HTTPS module, so no npm dependency is necessary. If `TWILIO_MESSAGING_SERVICE_SID` is defined it takes precedence over `TWILIO_FROM`.
 
-**Malaysia:** Confirm the sender registration and use case with the SMS provider. Malaysian operators require compliant sender identification, `RM0.00`, and a legitimate brand in the message body. Fully anonymous SMS or fabricated sender IDs are **not** supported. Depending on routing, an operator may replace the displayed sender with a shortcode. Avoid links and phone numbers inside SMS content. The generic text variants in `backend/utils/chatNotifications.js` follow these formatting constraints, but live delivery still needs provider approval and testing.
+**Malaysia:** Confirm the sender registration and use case with the SMS provider. Malaysian operators require compliant sender identification, `RM 0.00`, and a legitimate brand in the message body. Fully anonymous SMS or fabricated sender IDs are **not** supported. Depending on routing, an operator may replace the displayed sender with a shortcode. Avoid links and phone numbers inside SMS content. The generic text variants in `backend/utils/chatNotifications.js` follow these formatting constraints, but live delivery still needs provider approval and testing.
 
 Messages do not reveal the chat or personal names. However, neither SMS nor WhatsApp can guarantee that a third party will not infer that a private alert arrived. Terence needs to consent to receiving these automated texts. SMS service charges apply.
 
