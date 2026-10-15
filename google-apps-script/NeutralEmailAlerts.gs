@@ -37,6 +37,7 @@ function safeEqual_(a, b) {
 
 function doPost(e) {
   let lock;
+  let locked = false;
   try {
     const props = PropertiesService.getScriptProperties();
     const secret = props.getProperty('ALERT_SECRET');
@@ -55,7 +56,8 @@ function doPost(e) {
     }
 
     lock = LockService.getScriptLock();
-    if (!lock.tryLock(10000)) return output_('RETRY');
+    locked = lock.tryLock(10000);
+    if (!locked) return output_('RETRY');
 
     // Throttle here too, in case the webhook is accidentally requested twice
     // or two independent backends send at the same time.
@@ -84,7 +86,7 @@ function doPost(e) {
     console.error('Neutral Gmail delivery failed: ' + (error && error.message));
     return output_('ERROR');
   } finally {
-    if (lock) lock.releaseLock();
+    if (locked && lock) lock.releaseLock();
   }
 }
 
