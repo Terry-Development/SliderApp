@@ -1,4 +1,13 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Only the dedicated feature-branch preview routes to its temporary Render
+// backend. Everything else (production, other previews, local dev) retains
+// the existing NEXT_PUBLIC_API_URL behavior.
+const PREVIEW_FRONTEND_HOST = 'slider-app-git-feature-discre-f0ff94-terences-projects-72226b28.vercel.app';
+const PREVIEW_BACKEND_URL = 'https://sliderapp-pr-2.onrender.com';
+
+export const API_URL = (
+    typeof window !== 'undefined' &&
+    window.location.hostname === PREVIEW_FRONTEND_HOST
+) ? PREVIEW_BACKEND_URL : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001');
 
 export const getAuthHeaders = () => {
     const password = typeof window !== 'undefined' ? localStorage.getItem('admin_password') : '';
