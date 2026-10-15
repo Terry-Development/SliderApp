@@ -3,6 +3,25 @@ const { MongoClient } = require('mongodb');
 let client = null;
 let db = null;
 
+// Render's PR service previews inherit environment variables from production.
+// They must never select the production MongoDB database, even if that name
+// was inherited through MONGODB_DB_NAME.
+function resolveDatabaseName() {
+    if (process.env.IS_PULL_REQUEST === 'true') {
+        const explicitPreviewName = String(process.env.MONGODB_PREVIEW_DB_NAME || '').trim();
+        if (explicitPreviewName) {
+            if (!/^sliderapp_preview_[a-z0-9_]{1,36}$/.test(explicitPreviewName)) {
+                throw new Error('MONGODB_PREVIEW_DB_NAME must start with sliderapp_preview_');
+            }
+            return explicitPreviewName;
+        }
+        const service = String(process.env.RENDER_EXTERNAL_HOSTNAME || process.env.RENDER_SERVICE_NAME || 'pr')
+            .split('.')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 32);
+        return `sliderapp_preview_${service}`;
+    }
+    return process.env.MONGODB_DB_NAME || 'sliderapp';
+}
+
 async function connectToDatabase() {
     if (db) {
         return db; // Return existing connection
@@ -18,7 +37,7 @@ async function connectToDatabase() {
         client = new MongoClient(uri);
         await client.connect();
 
-        db = client.db(process.env.MONGODB_DB_NAME || 'sliderapp');
+        db = client.db(resolveDatabaseName());
         console.log('✓ Connected to MongoDB Atlas');
 
         return db;
@@ -47,5 +66,6 @@ async function closeDatabase() {
 module.exports = {
     connectToDatabase,
     getDatabase,
-    closeDatabase
+    closeDatabase,
+    resolveDatabaseName
 };
