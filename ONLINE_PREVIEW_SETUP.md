@@ -18,7 +18,7 @@ Render PR previews inherit environment variables, potentially including the prod
 
 1. MongoDB always uses a separate database named `sliderapp_preview_<Render service>`, ignoring an inherited production `MONGODB_DB_NAME`.
 2. Image and album writes/deletes are blocked; previews can read photos.
-3. SMS sending is disabled by default, even if Twilio credentials were inherited.
+3. Gmail alerts are disabled by default, even if webhook credentials were inherited. Enable only with `ALLOW_PREVIEW_EMAIL=true`.
 4. Existing reminder subscriptions are in the new preview database and will not receive chat pushes until Jessy opts in on a device.
 
 In Render's preview Environment settings, you can explicitly set `MONGODB_PREVIEW_DB_NAME=sliderapp_preview_pr2` (optional). If your MongoDB user does not have permissions to create or access a new database, the preview will need separate MongoDB credentials with appropriate permissions.
@@ -36,22 +36,24 @@ In Render's preview Environment settings, you can explicitly set `MONGODB_PREVIE
 
 Push works only with supported browsers and notification permissions. On iOS, supported web push requires adding the app to the Home Screen. The VAPID public/private keys must exist in the Vercel and Render preview environments. The preview backend's first request can be slower if the service is sleeping.
 
-## Test Terence's discreet SMS separately
+## Test Terence's neutral Gmail alert (free)
 
-SMS is **disabled on PR previews by default**. To enable a controlled test, configure the temporary Render preview's Environment settings with the recipient's explicit consent:
-
+1. Create a Google Apps Script project and paste **`google-apps-script/NeutralEmailAlerts.gs`**.
+2. In **Project Settings → Script properties**, set `ALERT_SECRET` (long random secret) and `ALERT_TO_EMAIL` (Terence's consenting email address).
+3. Run `authorizeMail` once in the Apps Script editor to approve Gmail send-only permissions.
+4. Deploy it as **Web app**, **Execute as: Me**, **Who has access: Anyone**. Copy the deployed `https://script.google.com/macros/s/.../exec` URL.
+5. In the **sliderapp-pr-2** Render preview Environment settings, set:
 ```text
-ALLOW_PREVIEW_SMS=true
-TWILIO_ACCOUNT_SID=<Twilio account SID>
-TWILIO_AUTH_TOKEN=<secret>
-TERENCE_SMS_TO=+60<authorized number>
-TWILIO_MESSAGING_SERVICE_SID=<approved sender's messaging service SID>
-SMS_ALERT_BRAND=<registered sending brand>
+GMAIL_ALERT_WEBHOOK_URL=https://script.google.com/macros/s/<YOUR_DEPLOYMENT_ID>/exec
+GMAIL_ALERT_SECRET=<SAME_32_PLUS_CHAR_SECRET_AS_APPS_SCRIPT>
+ALLOW_PREVIEW_EMAIL=true
 ```
+6. After redeploying, open the frontend preview as **Jessy** and send a message. Terence will receive an email with generic subject `Account update` and a neutral randomized body, not the message content.
+7. Check Android Gmail notifications are on and the sender address is one you're comfortable seeing on the lock screen.
 
-You may use `TWILIO_FROM` instead of a messaging service SID. No secrets or phone numbers should be committed to GitHub or put in frontend environment variables.
+Render Free blocks SMTP ports 25/465/587, so the preview calls Apps Script via HTTPS port 443 instead. Free consumer Google Apps Script mail sending has a quota (currently 100 email recipients/day). The visible Gmail sender address cannot be hidden.
 
-Malaysian sender verification and network regulations apply. SMS content remains generic, but the provider/required sending brand may still identify the service; it cannot be truly anonymous. SMS sending incurs charges. Messages are limited to one per two-minute bucket.
+See **`CHAT_NOTIFICATIONS_SETUP.md`** for detailed setup and troubleshooting.
 
 ## Automated checks and troubleshooting
 
@@ -60,9 +62,9 @@ Malaysian sender verification and network regulations apply. SMS content remains
 - A login **Connection error** on the Vercel site usually means the preview backend is not reachable or configured correctly.
 - Login works but messages do not load: check MongoDB connection/permissions for the preview database.
 - No Jessy push: check notification permission, VAPID keys, subscription status, and your service-worker installation.
-- No SMS: expected until `ALLOW_PREVIEW_SMS=true` and real Twilio credentials have been configured on the **preview** backend.
+- No email: expected until Google Apps Script is deployed and `ALLOW_PREVIEW_EMAIL=true` with the matching webhook URL and secret in the **preview** backend. Check Apps Script Executions logs.
 - Closing or merging PR #2 deletes the Render PR service preview; your main branch remains untouched until a merge.
 
 ## Deployment status
 
-This file only documents routing and safeguards. The actual browser-to-server and real SMS/push tests must be performed against the running URLs.
+This file only documents routing and safeguards. The actual browser-to-server and real email/push tests must be performed against the running URLs.
