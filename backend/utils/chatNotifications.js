@@ -18,15 +18,16 @@ function recipientForMessage(ownerId) {
   return null;
 }
 
-function buildDiscreetSmsBody(brand = process.env.SMS_ALERT_BRAND || 'SliderApp', index) {
-  const safeBrand = String(brand).replace(/[^a-zA-Z0-9 _-]/g, '').trim().slice(0, 30);
+function buildDiscreetSmsBody(brand = process.env.SMS_ALERT_BRAND, index) {
+  if (typeof brand !== 'string' || !brand.trim()) throw new Error('An approved SMS_ALERT_BRAND is required');
+  const safeBrand = brand.replace(/[^a-zA-Z0-9 _-]/g, '').trim().slice(0, 30);
   if (!safeBrand) throw new Error('An approved SMS_ALERT_BRAND is required');
   const chosen = Number.isInteger(index)
     ? Math.abs(index) % NEUTRAL_ALERTS.length
     : crypto.randomInt(NEUTRAL_ALERTS.length);
 
-  // Malaysian A2P messaging rules require RM0.00 and the legitimate brand.
-  return `RM0.00 ${safeBrand}: ${NEUTRAL_ALERTS[chosen]}`;
+  // Malaysian SMS guidelines specify an RM 0.00 header and legitimate brand.
+  return `RM 0.00 ${safeBrand}: ${NEUTRAL_ALERTS[chosen]}`;
 }
 
 function smsConfig() {
@@ -40,11 +41,12 @@ function smsConfig() {
   const to = process.env.TERENCE_SMS_TO;
   const from = process.env.TWILIO_FROM;
   const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+  const brand = process.env.SMS_ALERT_BRAND;
 
-  if (!sid || !token || !to || !(from || messagingServiceSid)) return null;
+  if (!sid || !token || !to || !(from || messagingServiceSid) || !brand?.trim()) return null;
   if (!/^AC[a-f0-9]{32}$/i.test(sid)) throw new Error('Invalid Twilio account configuration');
   if (!/^\+[1-9]\d{6,14}$/.test(to)) throw new Error('TERENCE_SMS_TO must be an E.164 phone number');
-  return { sid, token, to, from, messagingServiceSid };
+  return { sid, token, to, from, messagingServiceSid, brand };
 }
 
 function sendSmsThroughTwilio(config, body) {
@@ -130,7 +132,7 @@ async function sendDiscreetSmsToTerence(db) {
   }
 
   try {
-    const body = buildDiscreetSmsBody();
+    const body = buildDiscreetSmsBody(config.brand);
     await sendSmsThroughTwilio(config, body);
     return { channel: 'sms', status: 'submitted' };
   } catch (error) {
