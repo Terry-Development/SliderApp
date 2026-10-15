@@ -19,7 +19,9 @@ self.addEventListener('push', function (event) {
         icon: self.location.origin + '/icon-192x192.png', // Absolute path for Android
         badge: '/icon-192x192.png',
         vibrate: [100, 50, 100],
-        requireInteraction: true // Keep it on screen
+        requireInteraction: true, // Keep it on screen
+        data: { url: data.url || null },
+        tag: data.tag || undefined
     };
 
     event.waitUntil(
@@ -39,20 +41,37 @@ self.addEventListener('activate', function (event) {
 self.addEventListener('notificationclick', function (event) {
     event.notification.close();
 
+    const path = event.notification.data?.url;
+    const destination = new URL(path || '/', self.location.origin);
+    // Never let a notification redirect to a different website.
+    if (destination.origin !== self.location.origin) {
+        destination.href = self.location.origin + '/';
+    }
+
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
-            .then(function (clientList) {
-                // If there is already a window open, focus it
-                for (let i = 0; i < clientList.length; i++) {
-                    const client = clientList[i];
-                    if (client.url && 'focus' in client) {
-                        return client.focus();
+            .then(async function (clientList) {
+                const sameOrigin = clientList.filter(client => {
+                    try { return new URL(client.url).origin === self.location.origin; }
+                    catch (_) { return false; }
+                });
+
+                if (path) {
+                    const chatWindow = sameOrigin.find(client => {
+                        try { return new URL(client.url).pathname === destination.pathname; }
+                        catch (_) { return false; }
+                    });
+                    if (chatWindow?.focus) return chatWindow.focus();
+                    if (sameOrigin.length && sameOrigin[0].navigate) {
+                        const updated = await sameOrigin[0].navigate(destination.href);
+                        if (updated?.focus) return updated.focus();
                     }
+                    if (clients.openWindow) return clients.openWindow(destination.href);
                 }
-                // If no window is open, open a new one
-                if (clients.openWindow) {
-                    return clients.openWindow('/');
-                }
+
+                // Retain the original reminder notification behavior.
+                if (sameOrigin.length && sameOrigin[0].focus) return sameOrigin[0].focus();
+                if (clients.openWindow) return clients.openWindow('/');
             })
     );
 });
