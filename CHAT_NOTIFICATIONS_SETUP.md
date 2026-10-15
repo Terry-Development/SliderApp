@@ -1,80 +1,73 @@
-# Chat notifications (Jessy: web push; Terence: discreet SMS)
+# SliderApp chat notifications — Jessy web push, Terence neutral Gmail alert
 
-## Intended behavior
+## What happens
 
-- Message **from Terence**: notify only Jessy's chat-registered browser/PWA devices, with sender and preview. Clicking opens `/chat`.
-- Message **from Jessy**: submit one generic SMS alert for Terence. Never include Jessy's name, the sender, the recipient, the message contents, a direct link, or the fact that the alert was triggered by chat.
-- No SMS is sent when credentials are missing. Chat messages still save and load normally.
-- SMS alerts are throttled to **one per two-minute time bucket** to limit costs. Failed gateway calls release the lock for a later message.
-- Reminder broadcasts continue using their existing `subscriptions` collection. Chat pushes use subscriptions specifically marked `ownerId: 'partner'`.
-- A device with Reminders enabled must still opt in from Chat as Jessy. Selecting a name within the current shared-password app is not strong user authentication.
+- **Terence → Jessy:** sends a normal web-push alert, only to Jessy's devices explicitly subscribed from Chat.
+- **Jessy → Terence:** the Render backend calls a Google Apps Script web app over **HTTPS (port 443)**. That script sends a plain, generic email using Gmail's built-in `MailApp`. There is no message preview, sender name from the chat, URL or recipient detail in the email body.
+- The actual **sending Gmail address is visible**, like every legitimate email. The Android Gmail app can show the email as a normal notification.
+- Messages still save to MongoDB if email delivery fails or is not configured.
+- One email is attempted per two-minute server bucket, with a second throttle inside Google Apps Script. There is no third-party paid SMS service, Twilio, WhatsApp Cloud API, or Gmail SMTP password.
 
-## Jessy's device (browser/PWA)
+Google Apps Script has a limited free email quota (currently **100 recipients/day** for consumer Google accounts, subject to change).
 
-1. Open the SliderApp Chat page on the desired device.
-2. Select **Jessy** in the existing identity switcher.
-3. Select **Enable alerts** and approve the operating system/browser push prompt.
-4. Verify the server's existing VAPID variables and PWA service worker are configured. Chat uses those same keys; no new push service is necessary.
-5. **Mute alerts** removes only the chat routing for that device. It does **not** unsubscribe from Reminders.
+## 1 — Set up a Google Apps Script
 
-iOS web push requires installation to the Home Screen and supported iOS versions. Android and desktop browser behavior varies with permissions and OS settings.
+1. Choose a Google account that will legitimately **send** the alerts. You can use a dedicated Gmail account with an unremarkable, truthful sender name. Do not impersonate another sender. The recipient's Gmail can be a different account.
+2. Visit https://script.google.com/home/start and select **New project**.
+3. Replace the contents of `Code.gs` with the source in `google-apps-script/NeutralEmailAlerts.gs` from this GitHub feature branch.
+4. In Apps Script: **Project Settings → Script properties**, add:
+   - `ALERT_SECRET`: a random secret with at least 32 characters; do not commit it. You can generate one on a local computer running Node with `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`.
+   - `ALERT_TO_EMAIL`: the email address Terence wants to receive notifications at. Keep the address out of GitHub.
+5. Select the `authorizeMail` function in the editor toolbar and click **Run**. Approve Google's permissions. It does **not** send an email; it only checks quota to authorize `MailApp`.
+6. Select **Deploy → New deployment → Web app**. Choose **Execute as: Me** and **Who has access: Anyone**. Authorize the deployment.
+7. Copy the resulting `https://script.google.com/macros/s/.../exec` web app URL. Use the **/exec** URL, **not** the editor link or **/dev** URL.
 
-## Terence's SMS (backend only)
+Because this web app is callable by anyone on the internet, it rejects requests without the matching long shared secret. Never put the secret into client JavaScript, query strings, or GitHub. If compromised, rotate the secret in both Apps Script settings and Render.
 
-Configure the existing backend deployment's secret environment variables (e.g. on Render). Never place these values in `NEXT_PUBLIC_*` variables, in source code, or in GitHub:
+## 2 — Configure your temporary Render PR #2 service
 
-```env
-TWILIO_ACCOUNT_SID=AC................................
-TWILIO_AUTH_TOKEN=<secret>
-TERENCE_SMS_TO=+60..........
-TWILIO_MESSAGING_SERVICE_SID=MG................................
-# OR specify TWILIO_FROM=<your SMS-capable sender>, not both
-SMS_ALERT_BRAND=YourLegitimateRegisteredBrand
+Open https://dashboard.render.com and select **sliderapp-pr-2** (not the main production backend). Under **Environment**, set:
+
+```text
+IS_PULL_REQUEST=true                   # Verify Render assigned this
+GMAIL_ALERT_WEBHOOK_URL=https://script.google.com/macros/s/<YOUR_DEPLOYMENT_ID>/exec
+GMAIL_ALERT_SECRET=<THE_SAME_SECRET_AS_ALERT_SECRET>
+ALLOW_PREVIEW_EMAIL=true
 ```
 
-The SMS helper calls Twilio's HTTPS Messages endpoint using Node's built-in HTTPS module, so no npm dependency is necessary. If `TWILIO_MESSAGING_SERVICE_SID` is defined it takes precedence over `TWILIO_FROM`.
+Render's **Free** services block outbound SMTP ports 25/465/587. That is why this uses Apps Script on HTTPS 443 and does **not** use the Gmail app password / SMTP method.
 
-**Malaysia:** Confirm the sender registration and use case with the SMS provider. Malaysian operators require compliant sender identification, `RM 0.00`, and a legitimate brand in the message body. Fully anonymous SMS or fabricated sender IDs are **not** supported. Depending on routing, an operator may replace the displayed sender with a shortcode. Avoid links and phone numbers inside SMS content. The generic text variants in `backend/utils/chatNotifications.js` follow these formatting constraints, but live delivery still needs provider approval and testing.
+Only the temporary PR service needs these values for the first test. The code intentionally **disables email from PR previews unless `ALLOW_PREVIEW_EMAIL=true`**. The production `main` branch remains unchanged.
 
-Messages do not reveal the chat or personal names. However, neither SMS nor WhatsApp can guarantee that a third party will not infer that a private alert arrived. Terence needs to consent to receiving these automated texts. SMS service charges apply.
+Save the environment variables and redeploy/restart the preview service if Render does not redeploy automatically.
 
-## Server and client change list
+## 3 — Test
 
-- `backend/utils/chatNotifications.js`: recipient routing, Jessy push, Terence SMS, provider timeout, and coarse SMS throttling.
-- `backend/server.js`: new chat push subscription/status/unsubscribe endpoints, recipient alert after message persistence.
-- `frontend/src/pages/chat.js`: Jessy's opt-in and mute button.
-- `frontend/public/push-sw.js`: chat push opens `/chat`, existing reminder push behavior preserved.
-- `backend/test/chatNotifications.test.js`: routing and privacy regression tests.
+1. Open https://slider-app-git-feature-discre-f0ff94-terences-projects-72226b28.vercel.app/chat
+2. Sign in, choose **Jessy**, and send a short test message.
+3. Watch the **Inbox** of `ALERT_TO_EMAIL` in the Android Gmail app. Enable Gmail notifications in Android settings. You may need to check Spam/Promotions.
+4. The subject is `Account update`. The body is randomly selected from generic notices, such as `Your latest update is available.`
+5. Send another message in the same two-minute interval; only one notification is expected.
+6. Verify the recipient can still open SliderApp in Chrome when they want to read the chat; no app installation is required.
 
-## Testing checklist
+The notification **does not contain** the actual message. The sender Gmail address is still displayed by Gmail. Choose your sending account accordingly.
 
-```bash
-cd backend
-npm install
-npm test
-node --check server.js
-node --check utils/chatNotifications.js
-```
+## Troubleshooting
 
-Frontend:
+- **No email:** check Render Logs for `Chat alert delivery failed`, and Apps Script's **Executions** tab for errors.
+- **Missing Gmail permissions:** rerun `authorizeMail` in Apps Script editor and approve access.
+- **Backend says not configured:** inspect the three environment variables and ensure the URL ends in `/exec`.
+- **Bad Apps Script response:** verify deployment is `Execute as: Me`, `Anyone`, published, not `/dev`, and updated via **Manage deployments → Edit → New version** after changing its code.
+- **No messages loading:** verify preview MongoDB permissions and `IS_PULL_REQUEST=true`.
+- **Email arrives but Android is silent:** enable notifications for the Gmail account and allow its category, then check Do Not Disturb/battery restrictions.
+- **Quota exceeded:** Google Apps Script consumer quota is limited. Throttling reduces alerts but does not guarantee availability.
+- **Sender shows Google account name:** this is normal. Gmail cannot suppress or spoof the real sender's address.
 
-```bash
-cd frontend
-npm install
-npm run build
-```
+## Files changed
 
-Manual checks:
-1. With SMS env variables missing, send from Jessy; message must still save (no SMS).
-2. Enable push on Jessy's device; send from Terence; Jessy sees a notification and tapping opens Chat.
-3. Mute chat notifications on Jessy's device; send from Terence; no chat push is expected, but Reminders should still work.
-4. Add real SMS credentials/verified recipient to the deployed backend. Send from Jessy; confirm the SMS body includes no message text or personal names.
-5. Send several messages from Jessy in the same two-minute bucket; at most one SMS should be submitted.
-6. Test on the actual mobile carrier; successful API acceptance does **not** guarantee carrier delivery.
-7. Ensure a phone/device's identity selection is not shared by the wrong recipient.
+- `backend/utils/chatNotifications.js`: email routing via HTTPS and durable two-minute lock.
+- `google-apps-script/NeutralEmailAlerts.gs`: secure webhook, neutral Gmail text, second throttle.
+- `backend/test/`: integration helper and Apps Script mock unit tests.
+- Jessy's browser push UI and notifications remain unchanged.
 
-**Note:** This feature has not been live-delivery tested against Twilio, MongoDB Atlas, or the user's phones. Provider credentials and an opted-in recipient are required for an end-to-end test.
-
-## Optional later improvements
-
-A proper device-to-person sign-in would prevent anyone with the shared password from selecting another identity. Delivery receipt webhooks and provider failure metrics would improve SMS reliability. WhatsApp Business could be added later, but its account/template/sender identification requirements make it less suitable for discreet automatic alerts.
+**Security note:** a selected Chat identity is not strong authentication; the existing shared admin password grants access to both identities. Production should eventually replace it with person-specific accounts.
