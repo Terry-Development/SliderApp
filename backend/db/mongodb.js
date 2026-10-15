@@ -18,7 +18,7 @@ async function connectToDatabase() {
         client = new MongoClient(uri);
         await client.connect();
 
-        db = client.db('sliderapp');
+        db = client.db(process.env.MONGODB_DB_NAME || 'sliderapp');
         console.log('✓ Connected to MongoDB Atlas');
 
         return db;
