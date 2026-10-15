@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { resolveDatabaseName } = require('../db/mongodb');
-const { smsConfig } = require('../utils/chatNotifications');
+const { gmailAlertConfig } = require('../utils/chatNotifications');
 
 function withEnv(changes, fn) {
   const previous = {};
@@ -46,15 +46,13 @@ test('PR preview rejects unsafe database names', () => {
   });
 });
 
-test('PR preview cannot send inherited Twilio SMS without explicit opt-in', () => {
+test('PR preview cannot send inherited Gmail alerts without explicit opt-in', () => {
   withEnv({
     IS_PULL_REQUEST: 'true',
-    ALLOW_PREVIEW_SMS: null,
-    TWILIO_ACCOUNT_SID: 'AC' + 'a'.repeat(32),
-    TWILIO_AUTH_TOKEN: 'not-a-real-token',
-    TERENCE_SMS_TO: '+60123456789',
-    TWILIO_MESSAGING_SERVICE_SID: 'MG' + 'a'.repeat(32)
+    ALLOW_PREVIEW_EMAIL: null,
+    GMAIL_ALERT_WEBHOOK_URL: 'https://script.google.com/macros/s/AKfycbxtest/exec',
+    GMAIL_ALERT_SECRET: 'x'.repeat(40)
   }, () => {
-    assert.equal(smsConfig(), null);
+    assert.equal(gmailAlertConfig(), null);
   });
 });
