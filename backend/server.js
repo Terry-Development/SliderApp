@@ -16,6 +16,18 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// PR previews can inherit production Cloudinary credentials. Preserve read
+// access for previews, but block destructive image/album operations.
+app.use((req, res, next) => {
+  if (process.env.IS_PULL_REQUEST === 'true' &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
+      (/^\/images(?:\/|$)/.test(req.path) || /^\/albums(?:\/|$)/.test(req.path))) {
+    return res.status(403).json({ error: 'Media changes are disabled in the preview' });
+  }
+  next();
+});
+
+
 // Cloudinary Configuration
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
