@@ -852,6 +852,53 @@ app.post('/chat/subscribe', async (req, res) => {
   }
 });
 
+// The status endpoint checks whether this device was registered for Jessy's
+// chat notifications. Do not expose subscription keys or other device records.
+app.post('/chat/notification-status', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (getAppUserId(req) !== 'partner') {
+    return res.status(403).json({ error: 'Select Jessy first' });
+  }
+  const endpoint = req.body && req.body.endpoint;
+  if (typeof endpoint !== 'string' || !endpoint.startsWith('https://')) {
+    return res.status(400).json({ error: 'Invalid push endpoint' });
+  }
+  try {
+    const db = await getDatabase();
+    const existing = await db.collection('subscriptions').findOne({
+      endpoint, ownerId: 'partner'
+    });
+    res.json({ enabled: Boolean(existing) });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not check notification status' });
+  }
+});
+
+// Disable chat push for this device without affecting reminder notifications.
+app.post('/chat/unsubscribe', async (req, res) => {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (getAppUserId(req) !== 'partner') {
+    return res.status(403).json({ error: 'Select Jessy first' });
+  }
+  const endpoint = req.body && req.body.endpoint;
+  if (typeof endpoint !== 'string' || !endpoint.startsWith('https://')) {
+    return res.status(400).json({ error: 'Invalid push endpoint' });
+  }
+  try {
+    const db = await getDatabase();
+    await db.collection('subscriptions').updateOne(
+      { endpoint, ownerId: 'partner' }, { $unset: { ownerId: '' } }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Could not disable chat alerts' });
+  }
+});
+
 // --- Chat Routes (MongoDB) ---
 
 app.get('/chat/messages', async (req, res) => {
