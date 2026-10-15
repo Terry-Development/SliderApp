@@ -1,67 +1,68 @@
-# Online preview of chat notifications (feature branch)
+# SliderApp PR #2 — Online chat notification test
 
-## URLs and branch
-- Test frontend (Vercel branch preview): https://slider-app-git-feature-discre-f0ff94-terences-projects-72226b28.vercel.app/chat
-- GitHub branch: `feature/discreet-chat-alerts-20261015`
-- Production main remains unchanged.
+## Test URLs
 
-## Important
-The frontend preview is online but requires a **separate feature-branch backend** to test newly added chat API endpoints.
-Do **not** retarget the existing production Render service to the feature branch and do not configure the Vercel Preview frontend to use production as a notification test environment.
-Provider SMS requests must remain disabled until the authorized phone is configured and explicitly opted in.
+- **Frontend:** https://slider-app-git-feature-discre-f0ff94-terences-projects-72226b28.vercel.app/chat
+- **Temporary backend:** https://sliderapp-pr-2.onrender.com
+- **Backend health check:** https://sliderapp-pr-2.onrender.com/health
+- **Source branch:** `feature/discreet-chat-alerts-20261015`
+- **PR:** https://github.com/Terry-Development/SliderApp/pull/2
 
-## A. Create a new preview backend on Render
-1. Open https://dashboard.render.com and choose **New → Web Service**, then connect the `Terry-Development/SliderApp` GitHub repository.
-2. Name: `sliderapp-chat-preview` (or any available unique name).
-3. Branch: `feature/discreet-chat-alerts-20261015` — **not** `main`.
-4. Runtime: Node.
-5. Root directory: `backend`.
-6. Build command: `npm ci`.
-7. Start command: `npm start`.
-8. Health check path: `/health`.
-9. Choose the appropriate plan; a free instance may be offered, subject to Render's current policy.
-10. In the new preview service's Environment settings, set:
-   - `ADMIN_PASSWORD`: a **different** test password from production.
-   - `MONGODB_URI`: a MongoDB Atlas connection string for a test account or existing authorised cluster.
-   - `MONGODB_DB_NAME=sliderapp_preview`: separate database to isolate test messages, pushes and reminders.
-   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY`: your existing public VAPID key.
-   - `VAPID_PRIVATE_KEY`: matching private VAPID key.
-   - Cloudinary variables are optional for chat-only testing. Needed for gallery images: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`.
-   - **Do not** set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TERENCE_SMS_TO`, or Twilio sender details until you are ready for a paid, opted-in SMS test.
-11. Create the service and verify `https://<YOUR-NEW-RENDER-HOST>/health` responds `OK`.
+The frontend preview branch is configured to target the Render preview backend **only** on the exact Vercel feature-branch hostname above. Production and other hostnames continue using their existing API configuration.
 
-Important: the preview database's chat history is independent of the production database. A person must use the preview URL to read preview messages. The provided `MONGODB_DB_NAME` configuration is supported only on the feature branch and later versions that include this change.
+Render automatically deploys new commits to the open PR preview. Vercel automatically deploys branch updates. Neither deployment means that the live push system or SMS gateway has been tested on a device.
 
-## B. Connect the Vercel frontend preview to the Render test backend
-1. Open https://vercel.com/terences-projects-72226b28/slider-app and go to **Settings → Environment Variables**.
-2. Set `NEXT_PUBLIC_API_URL` to the **new preview Render service** origin, e.g. `https://sliderapp-chat-preview.onrender.com`. Do not append `/health` or `/chat`.
-3. Set `NEXT_PUBLIC_VAPID_PUBLIC_KEY` to the public VAPID key also used by the preview backend.
-4. Scope environment variables to the `feature/discreet-chat-alerts-20261015` preview branch. Avoid modifying Production variables.
-5. Redeploy the branch's Vercel Preview deployment so Next.js embeds the updated `NEXT_PUBLIC_*` variables at build time.
-6. Visit the preview /chat URL and sign in with the new preview `ADMIN_PASSWORD`.
+## Safety: production data must not be touched
 
-## C. Push test
-1. On Jessy's browser/device, open the **preview URL**, select Jessy, and click **Enable alerts**.
-2. Approve the notification prompt. The browser must support Web Push. On iOS, add the web app to the Home Screen on a supported device.
-3. On another browser/device, open the *same preview URL*, select Terence, and send a test message.
-4. Verify Jessy receives the push, and tapping the alert navigates to `/chat`.
-5. In Jessy's Chat page, click **Mute alerts**, then send another message; chat pushes should stop on that device but existing reminder notifications should remain enabled.
+Render PR previews inherit environment variables, potentially including the production MongoDB URI and Cloudinary credentials. This branch includes the following safeguards **when Render sets `IS_PULL_REQUEST=true`**:
 
-## D. SMS test (separate opt-in step)
-With explicit authorization from the intended phone recipient, add the following **only to the preview Render backend**:
-```
-TWILIO_ACCOUNT_SID=<account ID>
+1. MongoDB always uses a separate database named `sliderapp_preview_<Render service>`, ignoring an inherited production `MONGODB_DB_NAME`.
+2. Image and album writes/deletes are blocked; previews can read photos.
+3. SMS sending is disabled by default, even if Twilio credentials were inherited.
+4. Existing reminder subscriptions are in the new preview database and will not receive chat pushes until Jessy opts in on a device.
+
+In Render's preview Environment settings, you can explicitly set `MONGODB_PREVIEW_DB_NAME=sliderapp_preview_pr2` (optional). If your MongoDB user does not have permissions to create or access a new database, the preview will need separate MongoDB credentials with appropriate permissions.
+
+**Verify in the Render dashboard that the preview is recognized as a PR preview before testing.** An incorrect manually-deployed server without `IS_PULL_REQUEST=true` would not receive these safeguards.
+
+## Test Jessy's push notifications
+
+1. Open the **frontend test link** above on Jessy's phone or desktop browser.
+2. Log in using the backend's admin password, select Jessy in the existing identity picker.
+3. Select **Enable alerts**, allow notifications, and check the success message.
+4. On another browser or device, open the **same preview frontend**, select Terence, then send a short test message.
+5. The push should arrive on Jessy's device. Tap it: it should open the Chat page.
+6. Select **Mute alerts** on Jessy's device; send another test message and verify chat notifications stop. Reminder subscriptions are not disabled.
+
+Push works only with supported browsers and notification permissions. On iOS, supported web push requires adding the app to the Home Screen. The VAPID public/private keys must exist in the Vercel and Render preview environments. The preview backend's first request can be slower if the service is sleeping.
+
+## Test Terence's discreet SMS separately
+
+SMS is **disabled on PR previews by default**. To enable a controlled test, configure the temporary Render preview's Environment settings with the recipient's explicit consent:
+
+```text
+ALLOW_PREVIEW_SMS=true
+TWILIO_ACCOUNT_SID=<Twilio account SID>
 TWILIO_AUTH_TOKEN=<secret>
-TWILIO_MESSAGING_SERVICE_SID=<approved messaging service>
-TERENCE_SMS_TO=+60<test phone digits>
-SMS_ALERT_BRAND=<your approved sending brand>
+TERENCE_SMS_TO=+60<authorized number>
+TWILIO_MESSAGING_SERVICE_SID=<approved sender's messaging service SID>
+SMS_ALERT_BRAND=<registered sending brand>
 ```
-Twilio can require sender verification, registration, and other compliance steps. Malaysian SMS routes generally require legitimate sender identification and the `RM0.00` convention; private sender identity cannot be guaranteed. Never put chat text in the outbound SMS.
 
-1. Send a message *as Jessy* on preview.
-2. Verify the backend submits an SMS and, if approved, the phone receives a neutral notification.
-3. A second message inside the same two-minute bucket is suppressed to limit cost.
-4. Provider response success is not proof of final handset delivery.
+You may use `TWILIO_FROM` instead of a messaging service SID. No secrets or phone numbers should be committed to GitHub or put in frontend environment variables.
 
-## Cost and safety
-The Vercel preview may be covered by the existing plan; Render and SMS may incur charges depending on tier and usage. Never commit credentials to GitHub. Preview uses its own database name to avoid mixing production message and reminder data. Do not promote/merge the branch until mobile notifications, authentication, and the complete app have been verified.
+Malaysian sender verification and network regulations apply. SMS content remains generic, but the provider/required sending brand may still identify the service; it cannot be truly anonymous. SMS sending incurs charges. Messages are limited to one per two-minute bucket.
+
+## Automated checks and troubleshooting
+
+- Automated checks: https://github.com/Terry-Development/SliderApp/actions/workflows/preview-chat-checks.yml
+- The backend health endpoint should return `OK`. If it fails, check the Render PR preview deploy logs.
+- A login **Connection error** on the Vercel site usually means the preview backend is not reachable or configured correctly.
+- Login works but messages do not load: check MongoDB connection/permissions for the preview database.
+- No Jessy push: check notification permission, VAPID keys, subscription status, and your service-worker installation.
+- No SMS: expected until `ALLOW_PREVIEW_SMS=true` and real Twilio credentials have been configured on the **preview** backend.
+- Closing or merging PR #2 deletes the Render PR service preview; your main branch remains untouched until a merge.
+
+## Deployment status
+
+This file only documents routing and safeguards. The actual browser-to-server and real SMS/push tests must be performed against the running URLs.
