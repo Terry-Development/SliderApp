@@ -1,16 +1,54 @@
-# SliderApp chat notifications — Jessy web push, Terence neutral Gmail alert
+# SliderApp chat notifications — Jessy web push, Terence private Telegram alert
 
 ## What happens
 
 - **Terence → Jessy:** sends a normal web-push alert, only to Jessy's devices explicitly subscribed from Chat.
-- **Jessy → Terence:** the Render backend calls a Google Apps Script web app over **HTTPS (port 443)**. That script sends a plain, generic email using Gmail's built-in `MailApp`. There is no message preview, sender name from the chat, URL or recipient detail in the email body.
-- The actual **sending Gmail address is visible**, like every legitimate email. The Android Gmail app can show the email as a normal notification.
-- Messages still save to MongoDB if email delivery fails or is not configured.
-- One email is attempted per two-minute server bucket, with a second throttle inside Google Apps Script. There is no third-party paid SMS service, Twilio, WhatsApp Cloud API, or Gmail SMTP password.
+- **Jessy → Terence:** the Render backend sends a **promotional-looking Telegram bot message**, with rotating generic prize/reward language. The Telegram request contains **no SliderApp name, Jessy name, real message, or app link**.
+- Telegram messages are limited to **one attempt in any rolling two-minute window**, using an atomic MongoDB reservation so concurrent requests cannot bypass it. This means it does not send a message every two minutes unless Jessy sends a new chat message after the cooldown.
+- Messages still save to MongoDB if the notification fails or is not configured.
+- The existing neutral Gmail alert is an **optional fallback** when Telegram fails, and remains active until Telegram is configured. Jessy's existing browser push notifications are unchanged.
+
+## 1 — Create a neutral-looking Telegram bot
+
+1. Open **Telegram → @BotFather** (the verified Telegram account), send `/newbot`, and follow its instructions.
+2. Choose a neutral, promotional display name (for example, **Daily Rewards**) rather than `SliderApp`, `Jessy`, or a romantic nickname. Telegram notifications display the **bot's name** as well as the message text, so the bot name matters for privacy.
+3. Give the bot a unique username ending in `bot`, as BotFather requires. Keep its API token private; **do not put it in GitHub, frontend code, screenshots, or a message to anyone**.
+4. Open a private chat with the new bot from **Terence's Telegram account**, press **Start** or send `/start`. Telegram requires the recipient to initiate the bot chat first.
+5. Obtain that **private chat's numeric ID** from the bot's `getUpdates` Bot API response (look for `message.chat.id` after `/start`). Use only your own private-chat ID; group IDs are not accepted by this integration.
+
+## 2 — Configure the Render production backend
+
+In **Render → SliderApp production backend → Environment**, create these two secret environment variables:
+
+```text
+TELEGRAM_BOT_TOKEN=<TOKEN_FROM_BOTFATHER>
+TELEGRAM_CHAT_ID=<YOUR_PRIVATE_NUMERIC_CHAT_ID>
+```
+
+Save/redeploy the service. No frontend change or new npm dependency is required. Keep the existing Gmail settings if you want email fallback for Telegram API errors. If you remove them, Telegram still works but has no email fallback.
+
+**Safety:** Render PR previews can inherit production environment variables. This code refuses to send Telegram alerts from `IS_PULL_REQUEST=true` by default. Only set `ALLOW_PREVIEW_TELEGRAM=true` in an intentionally isolated preview if you really want its test messages on your phone; never turn this on casually.
+
+## 3 — Verify
+
+1. In Telegram, make sure the bot conversation is **not muted** and that Telegram notifications are allowed by Android/iOS. Set the notification importance to High if your device supports it, and check battery optimization restrictions.
+2. Log into SliderApp **as Jessy**, send one message, and verify a generic promotional Telegram message arrives. It should have no names or message details.
+3. Send a second message immediately. **No second Telegram alert** should be sent during the next 120 seconds.
+4. Send a third message after 120 seconds. A new promotional Telegram message should arrive.
+5. Log into SliderApp **as Terence** and send a message. Jessy's existing web-push behavior should remain unchanged and Terence should not receive a Telegram alert for his own message.
+6. If no Telegram message arrives, inspect Render logs for `Telegram submission failed` or `Telegram configuration invalid`. Test BotFather's token, whether your account has started the bot, and the private chat ID. A successful Telegram Bot API response confirms acceptance by Telegram, **not that the phone displayed a push banner**.
+
+No actual prize exists and the messages contain no claim link. They are decoy notices selected solely for the phone's notification preview.
+
+---
+
+## Optional legacy Gmail fallback
+
+The sections below document the **previous** email implementation. They are needed only if you keep Gmail as backup; they are not required for the Telegram setup above.
 
 Google Apps Script has a limited free email quota (currently **100 recipients/day** for consumer Google accounts, subject to change).
 
-## 1 — Set up a Google Apps Script
+### A — Set up a Google Apps Script
 
 1. Choose a Google account that will legitimately **send** the alerts. You can use a dedicated Gmail account with an unremarkable, truthful sender name. Do not impersonate another sender. The recipient's Gmail can be a different account.
 2. Visit https://script.google.com/home/start and select **New project**.
@@ -24,7 +62,7 @@ Google Apps Script has a limited free email quota (currently **100 recipients/da
 
 Because this web app is callable by anyone on the internet, it rejects requests without the matching long shared secret. Never put the secret into client JavaScript, query strings, or GitHub. If compromised, rotate the secret in both Apps Script settings and Render.
 
-## 2 — Configure your temporary Render PR #2 service
+### B — Configure the previous temporary Render PR #2 service (historical instructions)
 
 Open https://dashboard.render.com and select **sliderapp-pr-2** (not the main production backend). Under **Environment**, set:
 
@@ -41,7 +79,7 @@ Only the temporary PR service needs these values for the first test. The code in
 
 Save the environment variables and redeploy/restart the preview service if Render does not redeploy automatically.
 
-## 3 — Test
+### C — Test the legacy Gmail fallback
 
 1. Open https://slider-app-git-feature-discre-f0ff94-terences-projects-72226b28.vercel.app/chat
 2. Sign in, choose **Jessy**, and send a short test message.
@@ -65,9 +103,10 @@ The notification **does not contain** the actual message. The sender Gmail addre
 
 ## Files changed
 
-- `backend/utils/chatNotifications.js`: email routing via HTTPS and durable two-minute lock.
-- `google-apps-script/NeutralEmailAlerts.gs`: secure webhook, neutral Gmail text, second throttle.
-- `backend/test/`: integration helper and Apps Script mock unit tests.
+- `backend/utils/chatNotifications.js`: private Telegram Bot API routing, promotional decoy text, atomic rolling two-minute throttle, Gmail fallback and preview guard.
+- `backend/test/chatNotifications.test.js`: Telegram privacy, configuration, retry, cooldown and fallback tests, alongside the existing Gmail tests.
+- `CHAT_NOTIFICATIONS_SETUP.md`: Telegram activation instructions and retained Gmail fallback documentation.
+- `google-apps-script/NeutralEmailAlerts.gs`: **unchanged**; existing optional Gmail fallback.
 - Jessy's browser push UI and notifications remain unchanged.
 
 **Security note:** a selected Chat identity is not strong authentication; the existing shared admin password grants access to both identities. Production should eventually replace it with person-specific accounts.

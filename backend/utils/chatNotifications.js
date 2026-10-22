@@ -1,6 +1,14 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const webpush = require('web-push');
+
+const TELEGRAM_COOLDOWN_MS = 2 * 60 * 1000;
+const PROMOTIONAL_NOTICES = Object.freeze([
+  '🎉 Congratulations! You have been selected for an exclusive prize draw.',
+  '🎁 Lucky winner notice: A special reward has been reserved for you!',
+  '✨ Exclusive promotion! Your surprise bonus is waiting today.'
+]);
 
 // A message from Terence is intended for Jessy, and vice versa.
 function recipientForMessage(ownerId) {
@@ -47,6 +55,104 @@ async function sendViaAppsScript(config, fetchFn = fetch) {
   if (!response.ok || result !== 'OK') {
     throw new Error('Google Apps Script did not confirm email delivery');
   }
+}
+
+function telegramAlertConfig(env = process.env) {
+  // Render PR previews can inherit production secrets. They must explicitly
+  // opt in before being allowed to contact the real Telegram recipient.
+  if (env.IS_PULL_REQUEST === 'true' && env.ALLOW_PREVIEW_TELEGRAM !== 'true') {
+    return null;
+  }
+
+  const token = String(env.TELEGRAM_BOT_TOKEN || '').trim();
+  const chatId = String(env.TELEGRAM_CHAT_ID || '').trim();
+  if (!token && !chatId) return null;
+  if (!/^\d{5,}:[A-Za-z0-9_-]{20,}$/.test(token) || !/^[1-9]\d*$/.test(chatId)) {
+    throw new Error('TELEGRAM_BOT_TOKEN or private TELEGRAM_CHAT_ID is invalid');
+  }
+  return { token, chatId };
+}
+
+function promotionalNotice(nowMs = Date.now()) {
+  return PROMOTIONAL_NOTICES[Math.floor(nowMs / TELEGRAM_COOLDOWN_MS) % PROMOTIONAL_NOTICES.length];
+}
+
+async function sendViaTelegram(config, notice, fetchFn = fetch, sleepFn = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  // The payload is deliberately unrelated to any chat data, people or app URL.
+  // Only a server-side token and a single private recipient ID are used.
+  const body = JSON.stringify({
+    chat_id: config.chatId,
+    text: notice,
+    disable_notification: false,
+    protect_content: true
+  });
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let response;
+    try {
+      response = await fetchFn(`https://api.telegram.org/bot${config.token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(10000)
+      });
+    } catch (_error) {
+      if (attempt === 0) {
+        await sleepFn(1000);
+        continue;
+      }
+      throw new Error('Telegram API could not be reached');
+    }
+
+    const result = await response.json().catch(() => null);
+    if (response.ok && result?.ok === true && Number.isInteger(result.result?.message_id)) {
+      return { messageId: result.result.message_id };
+    }
+
+    const status = result?.error_code || response.status;
+    if (attempt === 0 && (status === 429 || status >= 500)) {
+      const retrySeconds = Number(result?.parameters?.retry_after);
+      await sleepFn(Number.isFinite(retrySeconds) && retrySeconds > 0
+        ? Math.min(retrySeconds * 1000, 5000) : 1000);
+      continue;
+    }
+    throw new Error(`Telegram API did not acknowledge the alert (HTTP ${response.status})`);
+  }
+  throw new Error('Telegram API did not acknowledge the alert');
+}
+
+async function sendDiscreetTelegramToTerence(db, config, send = sendViaTelegram, nowMs = Date.now()) {
+  const locks = db.collection('chat_telegram_alert_state');
+  const now = new Date(nowMs);
+  const attemptId = crypto.randomUUID();
+
+  // Atomic reservation: a true rolling two-minute interval, including when
+  // several chat requests or Render instances arrive at the same moment.
+  try {
+    await locks.findOneAndUpdate(
+      {
+        _id: 'terence',
+        $or: [{ nextEligibleAt: { $lte: now } }, { nextEligibleAt: { $exists: false } }]
+      },
+      {
+        $set: {
+          nextEligibleAt: new Date(nowMs + TELEGRAM_COOLDOWN_MS),
+          attemptedAt: now,
+          attemptId
+        }
+      },
+      { upsert: true, returnDocument: 'after' }
+    );
+  } catch (error) {
+    if (error.code === 11000) return { channel: 'telegram', status: 'throttled' };
+    throw error;
+  }
+
+  // Keep the cooldown even if Telegram fails and Gmail fallback is used:
+  // the user asked for no more than one alert attempt every two minutes.
+  const result = await send(config, promotionalNotice(nowMs));
+  console.info('Private promotional Telegram alert submitted');
+  return { channel: 'telegram', status: 'submitted', messageId: result?.messageId ?? null };
 }
 
 async function sendPushToJessy(db, message) {
@@ -107,10 +213,35 @@ async function sendDiscreetEmailToTerence(db, send = sendViaAppsScript) {
   }
 }
 
+async function sendAlertToTerence(db, sendTelegram = sendViaTelegram, sendEmail = sendViaAppsScript) {
+  let config;
+  try {
+    config = telegramAlertConfig();
+  } catch (_error) {
+    console.error('Telegram configuration invalid; trying existing Gmail fallback');
+    return sendDiscreetEmailToTerence(db, sendEmail);
+  }
+
+  // Keep the current Gmail behavior until the two Telegram environment
+  // variables are configured; also preserves safe PR-preview behavior.
+  if (!config) return sendDiscreetEmailToTerence(db, sendEmail);
+
+  try {
+    return await sendDiscreetTelegramToTerence(db, config, sendTelegram);
+  } catch (_error) {
+    console.error('Telegram submission failed; trying existing Gmail fallback');
+    const fallback = await sendDiscreetEmailToTerence(db, sendEmail);
+    if (fallback.status === 'not_configured') {
+      return { channel: 'telegram', status: 'failed', fallback: 'not_configured' };
+    }
+    return { ...fallback, fallbackFrom: 'telegram' };
+  }
+}
+
 async function dispatchChatAlert(db, message) {
   const recipient = recipientForMessage(message.ownerId);
   if (recipient === 'partner') return sendPushToJessy(db, message);
-  if (recipient === 'terence') return sendDiscreetEmailToTerence(db);
+  if (recipient === 'terence') return sendAlertToTerence(db);
   return { channel: 'none' };
 }
 
@@ -119,6 +250,11 @@ module.exports = {
   gmailAlertConfig,
   gmailAlertRequest,
   sendViaAppsScript,
+  telegramAlertConfig,
+  promotionalNotice,
+  sendViaTelegram,
+  sendDiscreetTelegramToTerence,
   sendDiscreetEmailToTerence,
+  sendAlertToTerence,
   dispatchChatAlert
 };
