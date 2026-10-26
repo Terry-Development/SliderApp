@@ -1,18 +1,16 @@
+/* Chat photos use Cloudinary transformations or local blob previews. */
+/* eslint-disable @next/next/no-img-element */
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import AuthWrapper from '@/components/AuthWrapper';
 import PersonPicker from '@/components/PersonPicker';
+import ChatMessage from '@/components/ChatMessage';
 import { API_URL } from '@/utils/api';
 import { PEOPLE, getStoredIdentity, personHeaders } from '@/utils/identity';
 import { urlBase64ToUint8Array } from '@/utils/urlBase64ToUint8Array';
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-
-function formatMessageTime(value) {
-    const date = new Date(value);
-    return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date);
-}
 
 function dayKey(value) {
     return new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -21,18 +19,39 @@ function dayKey(value) {
 export default function ChatPage() {
     const [messages, setMessages] = useState([]);
     const [text, setText] = useState('');
+    const [selectedImage, setSelectedImage] = useState(null);
+    const [imagePreview, setImagePreview] = useState('');
+    const [viewingImage, setViewingImage] = useState('');
     const [identity, setIdentity] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState('');
     const bottomRef = useRef(null);
     const textareaRef = useRef(null);
+    const fileInputRef = useRef(null);
     const initialLoadRef = useRef(true);
     const [pushBusy, setPushBusy] = useState(false);
     const [pushEnabled, setPushEnabled] = useState(false);
     const [pushMessage, setPushMessage] = useState('');
 
     useEffect(() => setIdentity(getStoredIdentity()), []);
+
+    useEffect(() => {
+        if (!selectedImage) {
+            setImagePreview('');
+            return;
+        }
+        const url = URL.createObjectURL(selectedImage);
+        setImagePreview(url);
+        return () => URL.revokeObjectURL(url);
+    }, [selectedImage]);
+
+    useEffect(() => {
+        if (!viewingImage) return;
+        const onKeyDown = (event) => { if (event.key === 'Escape') setViewingImage(''); };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [viewingImage]);
 
     const fetchMessages = useCallback(async (silent = false) => {
         try {
@@ -67,6 +86,56 @@ export default function ChatPage() {
     useEffect(() => {
         if (!initialLoadRef.current && messages.length) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages.length]);
+
+    // A receipt is sent only when the actual conversation is visible, not
+    // simply because a background tab fetched messages during polling.
+    const unseenIds = useMemo(() => messages
+        .filter(message => message.id && message.ownerId && message.ownerId !== identity && !message.seenAt)
+        .map(message => message.id), [messages, identity]);
+    const unseenKey = unseenIds.join(',');
+
+    useEffect(() => {
+        if (!identity || !unseenKey) return;
+        const ids = unseenKey.split(',');
+        const controller = new AbortController();
+        let inFlight = false;
+        let succeeded = false;
+
+        const markSeen = async () => {
+            if (inFlight || succeeded || document.visibilityState !== 'visible') return;
+            inFlight = true;
+            try {
+                const response = await fetch(`${API_URL}/chat/messages/seen`, {
+                    method: 'POST',
+                    headers: personHeaders(identity, true),
+                    body: JSON.stringify({ ids }),
+                    signal: controller.signal
+                });
+                if (!response.ok) throw new Error('Could not save read receipts');
+                const data = await response.json();
+                succeeded = true;
+                const marked = new Set(ids);
+                setMessages(current => current.map(message =>
+                    marked.has(message.id) && message.ownerId !== identity && !message.seenAt
+                        ? { ...message, seenAt: data.seenAt }
+                        : message
+                ));
+            } catch (error) {
+                if (error.name !== 'AbortError') console.warn('Read receipt failed:', error);
+            } finally {
+                inFlight = false;
+            }
+        };
+
+        markSeen();
+        document.addEventListener('visibilitychange', markSeen);
+        window.addEventListener('focus', markSeen);
+        return () => {
+            controller.abort();
+            document.removeEventListener('visibilitychange', markSeen);
+            window.removeEventListener('focus', markSeen);
+        };
+    }, [identity, unseenKey]);
 
     useEffect(() => {
         let cancelled = false;
@@ -166,20 +235,52 @@ export default function ChatPage() {
         return result;
     }, [messages]);
 
+    const lastOwnMessageId = useMemo(() => [...messages].reverse()
+        .find(message => message.ownerId === identity)?.id, [messages, identity]);
+
+    const chooseImage = (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+            setError('Choose a JPEG, PNG, GIF or WebP photo.');
+            event.target.value = '';
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            setError('Photos must be 10 MB or smaller.');
+            event.target.value = '';
+            return;
+        }
+        setSelectedImage(file);
+        setError('');
+    };
+
+    const removeImage = () => {
+        setSelectedImage(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
     const sendMessage = async () => {
         const cleanText = text.trim();
-        if (!cleanText || !identity || sending) return;
+        if ((!cleanText && !selectedImage) || !identity || sending) return;
         setSending(true);
         setText('');
         try {
+            const body = selectedImage ? new FormData() : JSON.stringify({ text: cleanText });
+            const headers = personHeaders(identity, !selectedImage);
+            if (selectedImage) {
+                body.append('text', cleanText);
+                body.append('image', selectedImage);
+            }
             const res = await fetch(`${API_URL}/chat/messages`, {
                 method: 'POST',
-                headers: personHeaders(identity, true),
-                body: JSON.stringify({ text: cleanText })
+                headers,
+                body
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || 'Message failed to send');
             setMessages((current) => current.some((m) => m.id === data.id) ? current : [...current, data]);
+            removeImage();
             setError('');
             requestAnimationFrame(() => textareaRef.current?.focus());
         } catch (err) {
@@ -187,6 +288,25 @@ export default function ChatPage() {
             setError(err.message || 'Message failed to send');
         } finally {
             setSending(false);
+        }
+    };
+
+    const reactToMessage = async (message, emoji) => {
+        if (!identity) return;
+        try {
+            const res = await fetch(`${API_URL}/chat/messages/${encodeURIComponent(message.id)}/reaction`, {
+                method: 'PATCH',
+                headers: personHeaders(identity, true),
+                body: JSON.stringify({ emoji })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Could not save reaction');
+            setMessages(current => current.map(item =>
+                item.id === message.id ? { ...item, reactions: data.reactions } : item
+            ));
+            setError('');
+        } catch (error) {
+            setError(error.message || 'Could not update reaction');
         }
     };
 
@@ -266,28 +386,16 @@ export default function ChatPage() {
                                             <div className="h-px bg-dark-border flex-1" />
                                         </div>
                                     );
-                                    const message = item.message;
-                                    const ownerId = message.ownerId || message.senderId || '';
-                                    const mine = ownerId === identity;
-                                    const senderName = PEOPLE[ownerId]?.name || message.sender || 'Earlier message';
                                     return (
-                                        <div key={message.id} className={`group flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                                            <div className={`max-w-[84%] md:max-w-[70%] flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
-                                                {!mine && <span className="text-xs text-primary-light px-1 mb-1">{senderName}</span>}
-                                                <div className={`relative rounded-2xl px-4 py-2.5 shadow-sm ${mine ? 'bg-gradient-to-br from-primary to-indigo-500 rounded-br-md' : 'bg-dark-card border border-dark-border rounded-bl-md'}`}>
-                                                    <p className="text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap break-words">{message.text}</p>
-                                                    <div className={`mt-1 flex items-center justify-end gap-2 text-[10px] ${mine ? 'text-indigo-100/70' : 'text-slate-500'}`}>
-                                                        <span>{formatMessageTime(message.createdAt)}</span>
-                                                        {mine && <span>✓</span>}
-                                                    </div>
-                                                    {mine && (
-                                                        <button onClick={() => deleteMessage(message.id)} className="absolute -left-9 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-2 text-slate-600 hover:text-red-400 transition-all" aria-label="Delete message">
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 7h12m-9 0V5h6v2m-8 0l1 13h8l1-13" /></svg>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <ChatMessage
+                                            key={item.message.id}
+                                            message={item.message}
+                                            identity={identity}
+                                            isLastMine={item.message.id === lastOwnMessageId}
+                                            onReact={reactToMessage}
+                                            onDelete={deleteMessage}
+                                            onViewImage={setViewingImage}
+                                        />
                                     );
                                 })}
                                 <div ref={bottomRef} />
@@ -296,7 +404,35 @@ export default function ChatPage() {
                     </section>
 
                     <footer className="border-t border-dark-border bg-dark-card p-3 md:p-4">
+                        {imagePreview && (
+                            <div className="flex items-center gap-3 mb-3 p-2 rounded-xl border border-dark-border bg-dark-bg max-w-xs">
+                                <img src={imagePreview} alt="Photo ready to send" className="h-14 w-14 object-cover rounded-lg" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium truncate">{selectedImage?.name}</p>
+                                    <p className="text-[11px] text-slate-500">Photo attached</p>
+                                </div>
+                                <button type="button" onClick={removeImage} disabled={sending} aria-label="Remove selected photo" className="p-2 text-slate-400 hover:text-white disabled:opacity-50">✕</button>
+                            </div>
+                        )}
                         <div className="flex items-end gap-2 md:gap-3">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/gif,image/webp"
+                                onChange={chooseImage}
+                                className="hidden"
+                                aria-label="Choose a photo"
+                            />
+                            <button
+                                type="button"
+                                disabled={!identity || sending}
+                                onClick={() => fileInputRef.current?.click()}
+                                aria-label="Attach photo"
+                                title="Attach photo (up to 10 MB)"
+                                className="w-12 h-12 shrink-0 rounded-full border border-dark-border text-slate-300 grid place-items-center hover:bg-white/10 disabled:opacity-40"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7a2 2 0 012-2h3l2-2h4l2 2h1a2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V7zm8 10a4 4 0 100-8 4 4 0 000 8z" /></svg>
+                            </button>
                             <textarea
                                 ref={textareaRef}
                                 value={text}
@@ -309,22 +445,31 @@ export default function ChatPage() {
                                 }}
                                 rows={1}
                                 placeholder={identity ? `Message as ${PEOPLE[identity]?.name}…` : 'Choose who you are first…'}
-                                disabled={!identity}
+                                disabled={!identity || sending}
                                 className="flex-1 min-h-12 max-h-32 resize-none bg-dark-bg border border-dark-border rounded-2xl px-4 py-3 text-sm placeholder-slate-500 focus:outline-none focus:border-primary disabled:opacity-50"
                             />
                             <button
                                 onClick={sendMessage}
-                                disabled={!identity || !text.trim() || sending}
+                                disabled={!identity || (!text.trim() && !selectedImage) || sending}
                                 className="w-12 h-12 shrink-0 rounded-full bg-gradient-to-br from-primary to-accent-purple grid place-items-center shadow-lg shadow-primary/20 disabled:opacity-40 disabled:shadow-none transition-all hover:scale-105 active:scale-95"
                                 aria-label="Send message"
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12l14-7-4 14-3-5-7-2zm7 2l3-3" /></svg>
+                                {sending ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12l14-7-4 14-3-5-7-2zm7 2l3-3" /></svg>
+                                )}
                             </button>
                         </div>
-                        <div className="text-[10px] text-slate-600 mt-2 px-2">Enter to send · Shift + Enter for a new line</div>
+                        <div className="text-[10px] text-slate-600 mt-2 px-2">Enter to send · Shift + Enter for a new line · Photos up to 10 MB</div>
                     </footer>
                 </div>
             </main>
+
+            {viewingImage && (
+                <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Chat photo viewer" onClick={() => setViewingImage('')}>
+                    <button type="button" className="absolute top-5 right-5 text-white border border-white/20 rounded-full px-4 py-2 text-sm" onClick={() => setViewingImage('')}>Close ✕</button>
+                    <img src={viewingImage} alt="Full-size chat photo" className="max-w-full max-h-[90vh] object-contain" onClick={event => event.stopPropagation()} />
+                </div>
+            )}
         </AuthWrapper>
     );
 }

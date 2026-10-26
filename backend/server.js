@@ -6,6 +6,14 @@ const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
 const { dispatchChatAlert } = require('./utils/chatNotifications');
+const {
+  MAX_CHAT_IMAGE_BYTES,
+  CHAT_REACTIONS,
+  CHAT_IMAGE_MIMES,
+  validateChatImage,
+  chatImageFolder,
+  validSeenIds
+} = require('./utils/chatFeatures');
 const { getDatabase } = require('./db/mongodb');
 require('dotenv').config();
 
@@ -589,22 +597,21 @@ async function processReminders() {
   }
 }
 
-// --- Scheduler (Runs every minute) ---
-cron.schedule('* * * * *', async () => {
-  await processReminders();
-});
+function startBackgroundTasks() {
+  // --- Scheduler (Runs every minute) ---
+  cron.schedule('* * * * *', async () => {
+    await processReminders();
+  });
 
-// --- Self-Ping to Keep Server Alive (14 mins) ---
-setInterval(() => {
-  const t = new Date();
-  if (t.getHours() >= 9 && t.getHours() <= 23) { // Only wake during day if needed, or always
-    // Use localhost loopback if possible, or leave it
-    // Actually, Render free tier sleeps regardless of internal intervals if no external requests.
-    // So this internal ping might not help much unless it makes an outbound request.
-    // For now, let's just log.
-    console.log('[System] Keep-alive tick');
-  }
-}, 14 * 60 * 1000);
+  // --- Self-Ping to Keep Server Alive (14 mins) ---
+  setInterval(() => {
+    const t = new Date();
+    if (t.getHours() >= 9 && t.getHours() <= 23) { // Only wake during day if needed, or always
+      // Render free tier sleeps regardless of internal intervals if no external requests.
+      console.log('[System] Keep-alive tick');
+    }
+  }, 14 * 60 * 1000);
+}
 
 // --- Debug Trigger Endpoint ---
 app.post('/debug-trigger-check', async (req, res) => {
@@ -913,6 +920,49 @@ app.post('/chat/unsubscribe', async (req, res) => {
 
 // --- Chat Routes (MongoDB) ---
 
+// Multipart is optional: existing text-only clients can keep sending JSON.
+// Images use a separate Cloudinary folder so they never appear in Gallery albums.
+const chatImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_CHAT_IMAGE_BYTES, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (!CHAT_IMAGE_MIMES.includes(file.mimetype)) return cb(new Error('Unsupported image type'));
+    cb(null, true);
+  }
+}).single('image');
+
+function requireChatIdentity(req, res, next) {
+  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  req.chatOwnerId = getAppUserId(req);
+  if (!req.chatOwnerId) return res.status(400).json({ error: 'Choose Terence or Jessy first' });
+  next();
+}
+
+function parseChatImage(req, res, next) {
+  chatImageUpload(req, res, error => {
+    if (error) {
+      return res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({
+        error: error.code === 'LIMIT_FILE_SIZE' ? 'Photos must be 10 MB or smaller.' : error.message
+      });
+    }
+    next();
+  });
+}
+
+async function uploadChatImage(file) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream({
+      folder: chatImageFolder(),
+      public_id: crypto.randomUUID(),
+      resource_type: 'image',
+      overwrite: false
+    }, (error, result) => error ? reject(error) : resolve(result));
+    stream.end(file.buffer);
+  });
+}
+
 app.get('/chat/messages', async (req, res) => {
   if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -936,28 +986,39 @@ app.get('/chat/messages', async (req, res) => {
   }
 });
 
-app.post('/chat/messages', async (req, res) => {
-  if (req.headers['x-admin-password'] !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+app.post('/chat/messages', requireChatIdentity, parseChatImage, async (req, res) => {
+  const ownerId = req.chatOwnerId;
+  const text = String(req.body?.text || '').trim().slice(0, 4000);
+  if (!text && !req.file) return res.status(400).json({ error: 'Message or photo is required' });
+  const imageError = validateChatImage(req.file);
+  if (imageError) return res.status(400).json({ error: imageError });
 
-  const ownerId = getAppUserId(req);
-  const text = String(req.body.text || '').trim().slice(0, 4000);
-
-  if (!ownerId) return res.status(400).json({ error: 'Choose Terence or Jessy first' });
-  if (!text) return res.status(400).json({ error: 'Message text is required' });
-
+  let uploadedPublicId = null;
+  let messageSaved = false;
   try {
+    let image = null;
+    if (req.file) {
+      const result = await uploadChatImage(req.file);
+      uploadedPublicId = result.public_id;
+      image = {
+        url: result.secure_url,
+        publicId: result.public_id,
+        width: result.width,
+        height: result.height
+      };
+    }
     const db = await getDatabase();
     const message = {
       id: crypto.randomUUID(),
       ownerId,
       sender: APP_PEOPLE[ownerId].name,
       text,
+      ...(image ? { image } : {}),
       createdAt: new Date()
     };
 
     await db.collection('chat_messages').insertOne(message);
+    messageSaved = true;
     // Notifications are best-effort: a provider outage must never lose a chat.
     try {
       await dispatchChatAlert(db, message);
@@ -967,7 +1028,53 @@ app.post('/chat/messages', async (req, res) => {
     res.status(201).json(message);
   } catch (err) {
     console.error('Create Chat Message Error:', err);
+    // Failed DB writes should not leave unreferenced uploads behind.
+    if (uploadedPublicId && !messageSaved) {
+      await cloudinary.uploader.destroy(uploadedPublicId).catch(() => {});
+    }
     res.status(500).json({ error: 'Failed to send chat message' });
+  }
+});
+
+// Only the other participant can mark explicitly displayed messages as seen.
+// This is never triggered by background polling on its own.
+app.post('/chat/messages/seen', requireChatIdentity, async (req, res) => {
+  const ids = validSeenIds(req.body?.ids);
+  if (!ids) return res.status(400).json({ error: 'Valid message IDs are required' });
+  try {
+    const db = await getDatabase();
+    const seenAt = new Date();
+    const otherId = req.chatOwnerId === 'terence' ? 'partner' : 'terence';
+    const result = await db.collection('chat_messages').updateMany(
+      { id: { $in: ids }, ownerId: otherId, seenAt: null },
+      { $set: { seenAt } }
+    );
+    res.json({ success: true, updated: result.modifiedCount, seenAt });
+  } catch (error) {
+    console.error('Mark chat messages seen error:', error);
+    res.status(500).json({ error: 'Could not mark messages as seen' });
+  }
+});
+
+// Each participant owns one reaction slot on each message; clearing one
+// reaction never removes the other participant's reaction.
+app.patch('/chat/messages/:id/reaction', requireChatIdentity, async (req, res) => {
+  const emoji = req.body?.emoji;
+  if (emoji !== null && !CHAT_REACTIONS.includes(emoji)) {
+    return res.status(400).json({ error: 'Choose a supported reaction' });
+  }
+  try {
+    const db = await getDatabase();
+    const collection = db.collection('chat_messages');
+    const field = `reactions.${req.chatOwnerId}`;
+    const update = emoji === null ? { $unset: { [field]: '' } } : { $set: { [field]: emoji } };
+    const result = await collection.updateOne({ id: req.params.id }, update);
+    if (!result.matchedCount) return res.status(404).json({ error: 'Message not found' });
+    const updated = await collection.findOne({ id: req.params.id }, { projection: { reactions: 1 } });
+    res.json({ reactions: updated?.reactions || {} });
+  } catch (error) {
+    console.error('Chat reaction error:', error);
+    res.status(500).json({ error: 'Could not update reaction' });
   }
 });
 
@@ -981,9 +1088,22 @@ app.delete('/chat/messages/:id', async (req, res) => {
 
   try {
     const db = await getDatabase();
-    const result = await db.collection('chat_messages').deleteOne({ id: req.params.id, ownerId });
+    const collection = db.collection('chat_messages');
+    const message = await collection.findOne({ id: req.params.id, ownerId });
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found or it belongs to the other person' });
+    }
+    const result = await collection.deleteOne({ id: req.params.id, ownerId });
     if (!result.deletedCount) {
       return res.status(404).json({ error: 'Message not found or it belongs to the other person' });
+    }
+    const imageId = message.image?.publicId;
+    if (typeof imageId === 'string' &&
+        (imageId.startsWith('sliderapp-chat/') || imageId.startsWith('sliderapp-preview-chat/'))) {
+      // An image cleanup failure must not make the deleted chat message reappear.
+      await cloudinary.uploader.destroy(imageId).catch(error => {
+        console.warn('Could not remove deleted chat photo:', error.message);
+      });
     }
     res.json({ success: true });
   } catch (err) {
@@ -1344,6 +1464,11 @@ app.delete('/notes/:id', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Backend Server running on port ${port}`);
-});
+if (require.main === module) {
+  startBackgroundTasks();
+  app.listen(port, () => {
+    console.log(`Backend Server running on port ${port}`);
+  });
+}
+
+module.exports = app;
