@@ -30,6 +30,8 @@ Chat photos are uploaded to Cloudinary under `sliderapp-chat/`, separate from
 the photo Gallery. PR previews use `sliderapp-preview-chat/<service>/` so their
 media cannot mix with production photos. MongoDB stores the image URL, ID and
 dimensions in the existing `chat_messages` collection. No migration is needed.
+The Vercel preview build maps this branch to the isolated Render PR #4 backend;
+unmapped previews fail closed instead of falling back to production.
 
 **Privacy note:** As with the existing Gallery, Cloudinary's standard image
 URLs are accessible to anyone who possesses their URL. The chat message list

@@ -1,13 +1,18 @@
-// Only the dedicated feature-branch preview routes to its temporary Render
-// backend. Everything else (production, other previews, local dev) retains
-// the existing NEXT_PUBLIC_API_URL behavior.
-const PREVIEW_FRONTEND_HOST = 'slider-app-git-feature-discre-f0ff94-terences-projects-72226b28.vercel.app';
-const PREVIEW_BACKEND_URL = 'https://sliderapp-pr-2.onrender.com';
+// Known preview hosts are a fallback for older static builds or deployment
+// aliases. Build-time preview detection also covers new deployment hostnames.
+const KNOWN_PREVIEW_BACKENDS = {
+    'slider-app-git-feature-discre-f0ff94-terences-projects-72226b28.vercel.app': 'https://sliderapp-pr-2.onrender.com',
+    'slider-app-git-feature-chat-s-c912ca-terences-projects-72226b28.vercel.app': 'https://sliderapp-pr-4.onrender.com',
+    'slider-8j33d56sr-terences-projects-72226b28.vercel.app': 'https://sliderapp-pr-4.onrender.com'
+};
 
-export const API_URL = (
-    typeof window !== 'undefined' &&
-    window.location.hostname === PREVIEW_FRONTEND_HOST
-) ? PREVIEW_BACKEND_URL : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001');
+const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+const knownPreviewBackend = KNOWN_PREVIEW_BACKENDS[currentHost];
+const previewBuild = process.env.NEXT_PUBLIC_SLIDERAPP_PREVIEW_MODE === 'true';
+
+export const API_URL = (previewBuild || knownPreviewBackend)
+    ? (knownPreviewBackend || process.env.NEXT_PUBLIC_SLIDERAPP_PREVIEW_API_URL || '/preview-backend-not-configured')
+    : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001');
 
 export const getAuthHeaders = () => {
     const password = typeof window !== 'undefined' ? localStorage.getItem('admin_password') : '';
