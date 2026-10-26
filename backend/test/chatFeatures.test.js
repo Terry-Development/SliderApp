@@ -48,7 +48,7 @@ test('seen IDs are validated and deduplicated', () => {
 });
 
 test('reactions are a small predefined set and photo alerts contain no empty text', () => {
-  assert.deepEqual(CHAT_REACTIONS, ['❤️', '😂', '😮', '😢', '👍', '🔥']);
+  assert.deepEqual(CHAT_REACTIONS, ['❤️', '🤣', '🥰', '😚', '🙄']);
   assert.equal(chatNotificationPreview({ text: '' }), 'sent a message');
   assert.equal(chatNotificationPreview({ text: '', image: { url: 'test' } }), 'sent a photo');
   assert.equal(chatNotificationPreview({ text: 'Caption', image: { url: 'test' } }), 'Caption');

@@ -145,14 +145,14 @@ test('chat routes support text, photos, read receipts, reactions and ownership',
     assert.deepEqual((await response.json()).reactions, { partner: '❤️' });
 
     response = await request(`/chat/messages/${textMessage.id}/reaction`, {
-      method: 'PATCH', headers: headers('terence'), body: JSON.stringify({ emoji: '😂' })
+      method: 'PATCH', headers: headers('terence'), body: JSON.stringify({ emoji: '🤣' })
     });
-    assert.deepEqual((await response.json()).reactions, { partner: '❤️', terence: '😂' });
+    assert.deepEqual((await response.json()).reactions, { partner: '❤️', terence: '🤣' });
 
     response = await request(`/chat/messages/${textMessage.id}/reaction`, {
       method: 'PATCH', headers: headers('partner'), body: JSON.stringify({ emoji: null })
     });
-    assert.deepEqual((await response.json()).reactions, { terence: '😂' });
+    assert.deepEqual((await response.json()).reactions, { terence: '🤣' });
 
     response = await request(`/chat/messages/${textMessage.id}/reaction`, {
       method: 'PATCH', headers: headers('partner'), body: JSON.stringify({ emoji: '$bad' })

@@ -1,7 +1,7 @@
 'use strict';
 
 const MAX_CHAT_IMAGE_BYTES = 10 * 1024 * 1024;
-const CHAT_REACTIONS = Object.freeze(['❤️', '😂', '😮', '😢', '👍', '🔥']);
+const CHAT_REACTIONS = Object.freeze(['❤️', '🤣', '🥰', '😚', '🙄']);
 const CHAT_IMAGE_MIMES = Object.freeze(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 
 function detectChatImageMime(buffer) {

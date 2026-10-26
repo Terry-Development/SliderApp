@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { PEOPLE } from '@/utils/identity';
 import { getOptimizedImageUrl } from '@/utils/api';
 
-const REACTION_EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
+const REACTION_EMOJIS = ['❤️', '🤣', '🥰', '😚', '🙄'];
 
 function formatTime(value) {
     if (!value) return '';
@@ -18,7 +18,8 @@ export default function ChatMessage({ message, identity, isLastMine, onReact, on
     const senderName = PEOPLE[ownerId]?.name || message.sender || 'Earlier message';
     const myReaction = message.reactions?.[identity];
     const reactionCounts = Object.values(message.reactions || {}).reduce((counts, emoji) => {
-        if (REACTION_EMOJIS.includes(emoji)) counts[emoji] = (counts[emoji] || 0) + 1;
+        // Continue displaying existing reactions from before the picker changed.
+        if (typeof emoji === 'string' && emoji) counts[emoji] = (counts[emoji] || 0) + 1;
         return counts;
     }, {});
 
@@ -59,8 +60,8 @@ export default function ChatMessage({ message, identity, isLastMine, onReact, on
                         <button
                             type="button"
                             key={emoji}
-                            onClick={() => react(emoji)}
-                            title={`React with ${emoji}`}
+                            onClick={() => REACTION_EMOJIS.includes(emoji) ? react(emoji) : setPickerOpen(true)}
+                            title={REACTION_EMOJIS.includes(emoji) ? `React with ${emoji}` : 'Choose a new reaction'}
                             className={`rounded-full border px-2 py-0.5 text-xs bg-dark-card hover:bg-white/10 ${myReaction === emoji ? 'border-primary text-white' : 'border-dark-border text-slate-300'}`}
                         >
                             {emoji}{count > 1 ? ` ${count}` : ''}
