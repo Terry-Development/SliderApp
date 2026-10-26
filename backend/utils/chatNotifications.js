@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const webpush = require('web-push');
+const { chatNotificationPreview } = require('./chatFeatures');
 
 const TELEGRAM_COOLDOWN_MS = 2 * 60 * 1000;
 const PROMOTIONAL_NOTICES = Object.freeze([
@@ -163,7 +164,7 @@ async function sendPushToJessy(db, message) {
 
   const payload = JSON.stringify({
     title: 'SliderApp Chat',
-    body: `${message.sender}: ${message.text.slice(0, 140)}`,
+    body: `${message.sender}: ${chatNotificationPreview(message)}`,
     url: '/chat',
     tag: `sliderapp-chat-${message.id}`
   });
