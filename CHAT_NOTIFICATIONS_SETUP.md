@@ -40,6 +40,27 @@ Save/redeploy the service. No frontend change or new npm dependency is required.
 
 No actual prize exists and the messages contain no claim link. They are decoy notices selected solely for the phone's notification preview.
 
+### Troubleshooting with Render Logs
+
+Open the **production** SliderApp web service in Render, select **Logs**, and choose
+the time range of the missed notification. These log messages do not expose the
+Telegram token, private chat ID, Gmail secret, or chat contents:
+
+| Log message | Interpretation |
+| --- | --- |
+| `Private promotional Telegram alert submitted` | Telegram returned `ok: true` and a `messageId`; this is API acknowledgement, **not** proof a phone banner appeared. |
+| `Telegram alert skipped: cooldown` | Another attempt was reserved within the previous 120 seconds; `remainingSeconds` is best-effort. |
+| `Telegram API retry scheduled` | A 429/5xx response caused a bounded retry; the log includes HTTP status and `retryAfterSeconds` when available. |
+| `Telegram transport retry scheduled` | A network error caused the first attempt to be retried. |
+| `Telegram submission failed; trying existing Gmail fallback` | The final attempt or cooldown reservation failed; inspect the structured error stage, kind, HTTP/API status, network code, and provider description if available. |
+| `Chat email notification outcome` | Shows whether Gmail fallback was submitted, throttled or not configured. |
+| `Chat email notification failed` | Gmail fallback raised an error. |
+
+`messageId` and the random `attemptId` identify acknowledged attempts. The
+cooldown remains active after a failed attempt by design, so a second message
+within two minutes is not an automatic retry. Production diagnostics do not
+send a test Telegram message or modify existing chat records.
+
 ---
 
 ## Optional legacy Gmail fallback

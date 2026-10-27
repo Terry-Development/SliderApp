@@ -11,6 +11,45 @@ const PROMOTIONAL_NOTICES = Object.freeze([
   '✨ Exclusive promotion! Your surprise bonus is waiting today.'
 ]);
 
+// Operational diagnostics only. Never log the bot token, chat ID, notification
+// body, Gmail secret, or private chat text.
+function alertErrorDetails(error) {
+  const safeType = /^[A-Za-z]{1,40}$/.test(error?.name || '') ? error.name : 'Error';
+  const details = { stage: error?.alertStage || 'notification', type: safeType };
+  if (error?.alertKind) details.kind = error.alertKind;
+  if (Number.isInteger(error?.httpStatus)) details.httpStatus = error.httpStatus;
+  if (Number.isInteger(error?.apiCode)) details.apiCode = error.apiCode;
+  if (Number.isFinite(error?.retryAfterSeconds)) details.retryAfterSeconds = error.retryAfterSeconds;
+  if (Number.isInteger(error?.attempts)) details.attempts = error.attempts;
+  if (error?.networkCode && /^[A-Z0-9_]{1,40}$/.test(error.networkCode)) {
+    details.networkCode = error.networkCode;
+  }
+  if (error?.code && /^[A-Z0-9_]{1,40}$/.test(String(error.code))) {
+    details.errorCode = error.code;
+  }
+  if (error?.networkErrorName && /^[A-Za-z]{1,40}$/.test(error.networkErrorName)) {
+    details.networkErrorName = error.networkErrorName;
+  }
+  if (error?.telegramDescription) details.telegramDescription = error.telegramDescription;
+  return details;
+}
+
+function telegramApiError(response, result, attempt, token, chatId) {
+  const error = new Error(`Telegram API did not acknowledge the alert (HTTP ${response.status})`);
+  error.alertStage = 'telegram-api';
+  error.alertKind = 'api-rejection';
+  error.httpStatus = response.status;
+  if (Number.isInteger(result?.error_code)) error.apiCode = result.error_code;
+  const retryAfter = Number(result?.parameters?.retry_after);
+  if (Number.isFinite(retryAfter) && retryAfter > 0) error.retryAfterSeconds = retryAfter;
+  if (typeof result?.description === 'string') {
+    error.telegramDescription = result.description
+      .replaceAll(token, '[redacted]').replaceAll(chatId, '[redacted-chat]').slice(0, 240);
+  }
+  error.attempts = attempt;
+  return error;
+}
+
 // A message from Terence is intended for Jessy, and vice versa.
 function recipientForMessage(ownerId) {
   if (ownerId === 'terence') return 'partner';
@@ -97,12 +136,26 @@ async function sendViaTelegram(config, notice, fetchFn = fetch, sleepFn = ms => 
         body,
         signal: AbortSignal.timeout(10000)
       });
-    } catch (_error) {
+    } catch (error) {
       if (attempt === 0) {
+        const networkErrorName = /^[A-Za-z]{1,40}$/.test(error?.name || '')
+          ? error.name : 'Error';
+        console.warn('Telegram transport retry scheduled', JSON.stringify({
+          attempt: 1,
+          networkErrorName,
+          networkCode: /^[A-Z0-9_]{1,40}$/.test(error?.cause?.code || error?.code || '')
+            ? (error?.cause?.code || error?.code) : undefined
+        }));
         await sleepFn(1000);
         continue;
       }
-      throw new Error('Telegram API could not be reached');
+      const transportError = new Error('Telegram API could not be reached');
+      transportError.alertStage = 'telegram-transport';
+      transportError.alertKind = 'network';
+      transportError.networkErrorName = error?.name || 'Error';
+      transportError.networkCode = error?.cause?.code || error?.code || null;
+      transportError.attempts = attempt + 1;
+      throw transportError;
     }
 
     const result = await response.json().catch(() => null);
@@ -113,11 +166,18 @@ async function sendViaTelegram(config, notice, fetchFn = fetch, sleepFn = ms => 
     const status = result?.error_code || response.status;
     if (attempt === 0 && (status === 429 || status >= 500)) {
       const retrySeconds = Number(result?.parameters?.retry_after);
-      await sleepFn(Number.isFinite(retrySeconds) && retrySeconds > 0
-        ? Math.min(retrySeconds * 1000, 5000) : 1000);
+      const delayMs = Number.isFinite(retrySeconds) && retrySeconds > 0
+        ? Math.min(retrySeconds * 1000, 5000) : 1000;
+      console.warn('Telegram API retry scheduled', JSON.stringify({
+        httpStatus: response.status,
+        apiCode: Number.isInteger(result?.error_code) ? result.error_code : null,
+        retryAfterSeconds: Number.isFinite(retrySeconds) && retrySeconds > 0 ? retrySeconds : null,
+        delayMs
+      }));
+      await sleepFn(delayMs);
       continue;
     }
-    throw new Error(`Telegram API did not acknowledge the alert (HTTP ${response.status})`);
+    throw telegramApiError(response, result, attempt + 1, config.token, config.chatId);
   }
   throw new Error('Telegram API did not acknowledge the alert');
 }
@@ -145,14 +205,30 @@ async function sendDiscreetTelegramToTerence(db, config, send = sendViaTelegram,
       { upsert: true, returnDocument: 'after' }
     );
   } catch (error) {
-    if (error.code === 11000) return { channel: 'telegram', status: 'throttled' };
+    if (error.code === 11000) {
+      // A duplicate-key conflict here means another attempt reserved the
+      // rolling cooldown. Read-only lookup is best effort for diagnostics.
+      const current = typeof locks.findOne === 'function'
+        ? await locks.findOne({ _id: 'terence' }, { projection: { nextEligibleAt: 1 } }).catch(() => null)
+        : null;
+      const nextMs = new Date(current?.nextEligibleAt || 0).getTime();
+      const remainingSeconds = Number.isFinite(nextMs) && nextMs > nowMs
+        ? Math.ceil((nextMs - nowMs) / 1000) : null;
+      console.info('Telegram alert skipped: cooldown', JSON.stringify({
+        status: 'COOLDOWN', remainingSeconds
+      }));
+      return { channel: 'telegram', status: 'throttled' };
+    }
+    error.alertStage = 'cooldown-reservation';
     throw error;
   }
 
   // Keep the cooldown even if Telegram fails and Gmail fallback is used:
   // the user asked for no more than one alert attempt every two minutes.
   const result = await send(config, promotionalNotice(nowMs));
-  console.info('Private promotional Telegram alert submitted');
+  console.info('Private promotional Telegram alert submitted', JSON.stringify({
+    status: 'ACK', messageId: result?.messageId ?? null, attemptId
+  }));
   return { channel: 'telegram', status: 'submitted', messageId: result?.messageId ?? null };
 }
 
@@ -215,23 +291,38 @@ async function sendDiscreetEmailToTerence(db, send = sendViaAppsScript) {
 }
 
 async function sendAlertToTerence(db, sendTelegram = sendViaTelegram, sendEmail = sendViaAppsScript) {
+  async function emailOutcome(reason) {
+    try {
+      const result = await sendDiscreetEmailToTerence(db, sendEmail);
+      console.info('Chat email notification outcome', JSON.stringify({ reason, status: result.status }));
+      return result;
+    } catch (error) {
+      console.error('Chat email notification failed', JSON.stringify({
+        reason, ...alertErrorDetails(error)
+      }));
+      throw error;
+    }
+  }
+
   let config;
   try {
     config = telegramAlertConfig();
-  } catch (_error) {
-    console.error('Telegram configuration invalid; trying existing Gmail fallback');
-    return sendDiscreetEmailToTerence(db, sendEmail);
+  } catch (error) {
+    console.error('Telegram configuration invalid; trying existing Gmail fallback',
+      JSON.stringify({ kind: 'invalid-configuration', ...alertErrorDetails(error) }));
+    return emailOutcome('telegram-invalid-configuration');
   }
 
   // Keep the current Gmail behavior until the two Telegram environment
   // variables are configured; also preserves safe PR-preview behavior.
-  if (!config) return sendDiscreetEmailToTerence(db, sendEmail);
+  if (!config) return emailOutcome('telegram-not-configured-or-preview-disabled');
 
   try {
     return await sendDiscreetTelegramToTerence(db, config, sendTelegram);
-  } catch (_error) {
-    console.error('Telegram submission failed; trying existing Gmail fallback');
-    const fallback = await sendDiscreetEmailToTerence(db, sendEmail);
+  } catch (error) {
+    console.error('Telegram submission failed; trying existing Gmail fallback',
+      JSON.stringify(alertErrorDetails(error)));
+    const fallback = await emailOutcome('telegram-failed');
     if (fallback.status === 'not_configured') {
       return { channel: 'telegram', status: 'failed', fallback: 'not_configured' };
     }
