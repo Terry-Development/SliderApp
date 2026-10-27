@@ -36,6 +36,10 @@ function fakeTelegramLocks() {
           }
           record = { _id: 'terence', ...update.$set };
           return { value: record };
+        },
+        async findOne(filter) {
+          assert.equal(filter._id, 'terence');
+          return record;
         }
       };
     }
@@ -150,6 +154,73 @@ test('Telegram POST uses only a decoy body and handles transient rate limits', a
   );
 });
 
+test('Telegram API failures retain safe HTTP, API and retry diagnostics', async () => {
+  const config = { token: telegramToken, chatId: telegramId };
+  const fakeFetch = async () => ({
+    ok: false, status: 429,
+    json: async () => ({
+      ok: false, error_code: 429,
+      description: `Too Many Requests for ${telegramToken} in ${telegramId}`,
+      parameters: { retry_after: 9 }
+    })
+  });
+  const previousWarn = console.warn;
+  const warnings = [];
+  console.warn = (...parts) => warnings.push(parts.join(' '));
+  try {
+    await assert.rejects(
+      sendViaTelegram(config, 'Offer', fakeFetch, async () => {}),
+      error => {
+        assert.equal(error.alertKind, 'api-rejection');
+        assert.equal(error.httpStatus, 429);
+        assert.equal(error.apiCode, 429);
+        assert.equal(error.retryAfterSeconds, 9);
+        assert.equal(error.attempts, 2);
+        assert.match(error.telegramDescription, /\[redacted\]/);
+        assert.doesNotMatch(error.telegramDescription, new RegExp(telegramToken));
+        assert.doesNotMatch(error.telegramDescription, new RegExp(telegramId));
+        return true;
+      }
+    );
+    assert.match(warnings.join('\n'), /"delayMs":5000/);
+    assert.doesNotMatch(warnings.join('\n'), new RegExp(telegramToken));
+  } finally {
+    console.warn = previousWarn;
+  }
+});
+
+test('Telegram network failures retain a safe transport cause', async () => {
+  const config = { token: telegramToken, chatId: telegramId };
+  let attempts = 0;
+  const fakeFetch = async () => {
+    attempts++;
+    throw Object.assign(new Error('Sensitive request URL'), {
+      name: 'TypeError', cause: { code: 'ETIMEDOUT' }
+    });
+  };
+  const previousWarn = console.warn;
+  const warnings = [];
+  console.warn = (...parts) => warnings.push(parts.join(' '));
+  try {
+    await assert.rejects(
+      sendViaTelegram(config, 'Offer', fakeFetch, async () => {}),
+      error => {
+        assert.equal(error.alertKind, 'network');
+        assert.equal(error.alertStage, 'telegram-transport');
+        assert.equal(error.networkCode, 'ETIMEDOUT');
+        assert.equal(error.attempts, 2);
+        assert.doesNotMatch(error.message, /Sensitive request URL/);
+        return true;
+      }
+    );
+    assert.equal(attempts, 2);
+    assert.match(warnings.join('\n'), /ETIMEDOUT/);
+    assert.doesNotMatch(warnings.join('\n'), /Sensitive request URL/);
+  } finally {
+    console.warn = previousWarn;
+  }
+});
+
 test('Telegram alerts use a rolling two-minute cooldown across multiple messages', async () => {
   const db = fakeTelegramLocks();
   const config = { token: telegramToken, chatId: telegramId };
@@ -166,6 +237,28 @@ test('Telegram alerts use a rolling two-minute cooldown across multiple messages
     channel: 'telegram', status: 'submitted', messageId: 81
   });
   assert.equal(delivered.length, 2);
+});
+
+test('Telegram logs acknowledge message IDs and explain cooldown without leaking secrets', async () => {
+  const db = fakeTelegramLocks();
+  const config = { token: telegramToken, chatId: telegramId };
+  const previousInfo = console.info;
+  const lines = [];
+  console.info = (...parts) => lines.push(parts.join(' '));
+  try {
+    await sendDiscreetTelegramToTerence(db, config, async () => ({ messageId: 901 }), 119000);
+    await sendDiscreetTelegramToTerence(db, config, async () => {
+      throw new Error('Should not send during cooldown');
+    }, 121000);
+    assert.match(lines.join('\n'), /Private promotional Telegram alert submitted/);
+    assert.match(lines.join('\n'), /"messageId":901/);
+    assert.match(lines.join('\n'), /"status":"COOLDOWN","remainingSeconds":118/);
+    assert.doesNotMatch(lines.join('\n'), new RegExp(telegramToken));
+    assert.doesNotMatch(lines.join('\n'), new RegExp(telegramId));
+    assert.doesNotMatch(lines.join('\n'), /prize draw|special reward|surprise bonus/i);
+  } finally {
+    console.info = previousInfo;
+  }
 });
 
 test('Telegram failure uses existing Gmail backup without revealing the message', async () => {
